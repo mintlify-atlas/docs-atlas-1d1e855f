@@ -1,0 +1,126 @@
+---
+title: 'Data tables overview'
+description: 'Learn how to navigate, sort, filter, and manage records in WebJET CMS data tables.'
+keywords: ['datatable', 'data table', 'sorting', 'filtering', 'pagination', 'columns', 'toolbar']
+---
+
+Data tables are the primary interface for viewing and managing records throughout the WebJET CMS admin UI. Every list of pages, users, products, or other content is displayed in a data table.
+
+## Navigating a data table
+
+### Pagination and page size
+
+The number of rows displayed per page is automatically calculated based on the height of your browser window. The first option in the page-size menu is **Automatic (X)**, where X is the calculated number of rows.
+
+To change the number of rows per page:
+
+<Steps>
+  <Step title="Open the settings panel">
+    Click the **settings icon** (<kbd>⚙</kbd> or the adjustments icon) in the table toolbar.
+  </Step>
+  <Step title="Select a page size">
+    Choose from the available options, including **Automatic**, fixed values, or **All**. Selecting **All** loads all records at once, which may cause high CPU usage for large datasets.
+  </Step>
+</Steps>
+
+<Warning>
+The **All** option is limited by the `datatablesExportMaxRows` configuration variable. Loading a very large number of rows directly in the browser can result in high CPU load.
+</Warning>
+
+Below the table, you can see how many records are currently displayed, the total record count, and pagination controls to move between pages.
+
+<Note>
+The automatic page-size calculation applies only to the main table window. Nested tables inside the editor (for example, the Edit History tab of a web page) always use a fixed page size.
+</Note>
+
+## Sorting columns
+
+Click any column header to sort the table by that column. Click again to reverse the sort order.
+
+The sort order is saved in your browser. When you return to the same section, the table will be sorted exactly as you left it.
+
+To reset the sort order to the default, click the **settings icon**, select **Column display**, and click **Refresh**.
+
+## Searching and filtering
+
+Use the search field at the top of the table to filter records by keyword. For tables with server-side pagination, the search is sent to the server and only matching records are returned.
+
+## Selecting rows
+
+Each row has a checkbox in the first column. Select one or more rows to enable toolbar actions such as **Edit**, **Duplicate**, and **Delete**.
+
+To select all visible rows, click the checkbox in the column header.
+
+## Toolbar buttons
+
+The table toolbar provides actions for working with records.
+
+| Button | Description |
+|---|---|
+| **Add** | Opens the editor dialog to create a new record. |
+| **Edit** | Opens the editor dialog for the selected record. Only available when exactly one row is selected. |
+| **Duplicate** | Creates a copy of the selected record. |
+| **Delete** | Deletes the selected records. A confirmation dialog listing the records to be deleted is shown before the action is carried out. |
+
+<Note>
+When editing a single record, the editor dialog title shows the name of the record being edited instead of the generic "Edit" label.
+</Note>
+
+The editor dialog can be moved by dragging it from the header area — useful when you need to see the content behind it.
+
+### Keyboard shortcut
+
+While in the editor dialog, press **Ctrl+S** (Windows) or **Cmd+S** (macOS) to save the record without closing the dialog.
+
+<Note>
+This shortcut may not be available when multiple dialogs are open at the same time.
+</Note>
+
+## Column visibility
+
+You can show or hide individual columns to focus on the data that matters to you.
+
+<Steps>
+  <Step title="Open the column display settings">
+    Click the **settings icon** in the toolbar, then select **Column display**.
+  </Step>
+  <Step title="Select the columns to display">
+    A dialog lists all available columns grouped by tab and section name (as they appear in the editor). Check or uncheck columns as needed.
+
+    The dialog also has **View all** and **Hide all** buttons to toggle all columns at once.
+  </Step>
+  <Step title="Save your selection">
+    Click **Save**. Your selected columns are saved in your browser and will be preserved after a page refresh.
+  </Step>
+</Steps>
+
+<Warning>
+Displaying a large number of columns increases the time it takes your browser to render the table.
+</Warning>
+
+### Column order
+
+You can reorder columns by dragging a column header left or right. The new order is saved in your browser.
+
+## Resetting the table layout
+
+To restore the default column list, column order, and sort order:
+
+<Steps>
+  <Step title="Open the column display settings">
+    Click the **settings icon**, then select **Column display**.
+  </Step>
+  <Step title="Click Refresh">
+    Click the **Refresh** button. This resets all column visibility, order, and sort preferences to their defaults.
+  </Step>
+</Steps>
+
+## Remembering state between sessions
+
+WebJET CMS automatically saves the following preferences in your browser for each table:
+
+- Column visibility (which columns are shown)
+- Column order
+- Sort column and direction
+
+These settings are per-browser. If you switch to a different browser or device, the table will use its default settings.

@@ -1,0 +1,155 @@
+---
+title: 'Installation overview'
+description: 'System requirements, supported databases, and deployment steps for WebJET CMS.'
+keywords: ['installation', 'system requirements', 'tomcat', 'java', 'database', 'deploy', 'webjet']
+---
+
+WebJET CMS is a Java web application deployed as a WAR file on Apache Tomcat. This page covers what you need before you install and how the basic deployment works.
+
+## System requirements
+
+### Hardware
+
+| Resource | Minimum |
+|----------|---------|
+| RAM | 8 GB (12 GB recommended for heavy workloads) |
+| CPU | Dual-core 2 GHz (quad-core for heavy workloads) |
+| Disk | 40 GB |
+
+For products such as NET, LMS, or DSK, the above values support up to 50 concurrent users. Add 4 GB RAM and 1 CPU for each additional 50 concurrent users. For more than 200 concurrent users, use a cluster setup.
+
+### Software
+
+| Component | Requirement |
+|-----------|-------------|
+| Java | OpenJDK 17 |
+| Application server | Tomcat 10 or 11 (Tomcat 11 required for the `jakarta` namespace version) |
+| DNS | Functional DNS server |
+| SMTP | Access to an SMTP server for email |
+| ImageMagick | Optional, recommended for faster image preview generation |
+
+<Note>
+  For NET, LMS, and DSK products, WebSocket support and a [RabbitMQ](https://www.rabbitmq.com/) server are also required.
+</Note>
+
+## Supported databases
+
+WebJET CMS supports the following relational databases:
+
+<CardGroup cols={2}>
+  <Card title="MySQL / MariaDB" icon="database">
+    MariaDB or MySQL version 5.0 and later. UTF-8 encoding required. InnoDB storage engine is used by default.
+  </Card>
+  <Card title="PostgreSQL" icon="database">
+    PostgreSQL 16 and later.
+  </Card>
+  <Card title="Microsoft SQL Server" icon="database">
+    Microsoft SQL Server 2012 and later.
+  </Card>
+  <Card title="Oracle" icon="database">
+    Oracle 11g and later.
+  </Card>
+</CardGroup>
+
+## Available versions
+
+WebJET CMS follows a `YEAR.WEEK` versioning scheme. Current versions:
+
+| Version | Description |
+|---------|-------------|
+| `2026.0-jakarta-SNAPSHOT` | Rolling snapshot for Tomcat 11 (Jakarta namespace). Updated continuously from the main repository. |
+| `2026.0-jakarta` | Stabilized 2026.0 release for Tomcat 11. |
+| `2025.0-jakarta-SNAPSHOT` | Rolling snapshot, supports Tomcat 10/11. |
+| `2025.0-SNAPSHOT` | Rolling snapshot without Jakarta namespace. |
+
+**Version naming conventions:**
+
+- `YEAR.0.x` — Patch releases. No new features are added; only bug fixes within the same major library versions.
+- `YEAR.0-SNAPSHOT` — Development version. Includes new features and all bug fixes from `YEAR.0.x`.
+- `YEAR.WEEK` — Stabilized weekly snapshot. Created from the SNAPSHOT after successful testing.
+
+<Tip>
+  `YEAR.0.x` is the most stable in terms of change volume. `YEAR.0-SNAPSHOT` is the safest in terms of security patches because it can incorporate major library updates.
+</Tip>
+
+## Obtaining WebJET CMS
+
+The base project template is available at [github.com/webjetcms/basecms](https://github.com/webjetcms/basecms).
+
+Declare the dependency in `build.gradle`:
+
+```groovy
+ext {
+    webjetVersion = "2026.0-jakarta"
+}
+
+dependencies {
+    implementation("com.webjetcms:webjetcms:${webjetVersion}")
+    implementation("com.webjetcms:webjetcms:${webjetVersion}:admin")
+    implementation("com.webjetcms:webjetcms:${webjetVersion}:components")
+    implementation("com.webjetcms:webjetcms:${webjetVersion}:libs")
+}
+```
+
+Stabilized versions are available on [Maven Central](https://mvnrepository.com/artifact/com.webjetcms/webjetcms). SNAPSHOT versions are published to GitHub Packages and require authentication credentials — contact the WebJET team to request access.
+
+## Basic deployment steps
+
+<Steps>
+  <Step title="Prepare the database">
+    Create a database schema and user. For MariaDB/MySQL, use `utf8mb4` character set:
+
+    ```sql
+    CREATE DATABASE mysite DEFAULT CHARACTER SET utf8mb4 DEFAULT COLLATE utf8mb4_general_ci;
+    CREATE USER mysite_user IDENTIFIED BY 'strong_password';
+    GRANT ALL PRIVILEGES ON mysite.* TO `mysite_user`@`%`;
+    FLUSH PRIVILEGES;
+    ```
+  </Step>
+  <Step title="Configure the database connection">
+    Set the JDBC connection in `WEB-INF/classes/poolman.xml` (or `src/main/resources/poolman.xml` in a Gradle project). See the [configuration guide](/install/configuration) for all supported formats.
+  </Step>
+  <Step title="Build the WAR">
+    ```bash
+    ./gradlew war
+    ```
+  </Step>
+  <Step title="Deploy to Tomcat">
+    Copy the WAR file to Tomcat's `webapps/` directory. Start Tomcat.
+  </Step>
+  <Step title="Initialize the schema">
+    On first start with an empty database, open `http://localhost/wjerrorpages/setup/setup` and complete the installation wizard.
+
+    <Warning>
+      The setup wizard is accessible only from `localhost`. Complete initialization before making the server publicly accessible.
+    </Warning>
+  </Step>
+  <Step title="Log in">
+    Open `http://your-host/admin/` and log in with the default credentials (`admin` / `heslo`). Change the password immediately.
+  </Step>
+</Steps>
+
+## Tomcat configuration note
+
+For Tomcat 9.0.104 and later, set `maxPartCount` on the HTTP connector to handle multi-part form submissions in the admin interface:
+
+```xml
+<Connector port="8080" protocol="HTTP/1.1"
+           connectionTimeout="20000"
+           redirectPort="8443"
+           maxPartCount="1000"
+           URIEncoding="UTF-8"
+           useBodyEncodingForURI="true"
+           relaxedQueryChars="^{}[]|&quot;" />
+```
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Configuration" icon="gear" href="/install/configuration">
+    Database pooling, SMTP, logging, cluster, and JVM settings.
+  </Card>
+  <Card title="MultiWeb" icon="globe" href="/install/multiweb">
+    Host multiple domains from a single installation.
+  </Card>
+</CardGroup>

@@ -1,0 +1,293 @@
+---
+title: 'OAuth2 / SSO'
+description: 'Configure OAuth2 and OpenID Connect login for WebJET CMS with providers like Google, GitHub, Facebook, Keycloak, Okta, and custom providers.'
+keywords: ['oauth2', 'sso', 'single sign-on', 'keycloak', 'google', 'openid connect', 'login', 'webjet']
+---
+
+WebJET CMS supports OAuth2/OIDC-based login for both the admin interface and the customer-facing zone. Users authenticate with an external identity provider. On first login a WebJET account is created automatically; on subsequent logins the account is updated.
+
+<Note>
+  Configuration is read at startup. After changing any OAuth2-related configuration variable, restart the application server.
+</Note>
+
+## How it works
+
+1. A user clicks the OAuth2 login button on the login page.
+2. WebJET redirects to the identity provider's authorization endpoint.
+3. After successful authentication, the provider redirects back to WebJET with a token.
+4. WebJET extracts the user's email, name, and groups from the token.
+5. If no WebJET account exists for that email, one is created. If the account exists, it is updated.
+6. Group and rights assignments are synchronized (for configured providers).
+
+User accounts are matched on email, which must be unique in the system.
+
+## Activating OAuth2
+
+Set the `oauth2_clients` configuration variable to a comma-separated list of provider names you want to activate:
+
+```properties
+oauth2_clients=google,keycloak
+```
+
+To show different providers on the admin interface vs. the customer zone:
+
+```properties
+oauth2_clientsIncludeAdmin=keycloak
+oauth2_clientsIncludeUser=google,facebook
+```
+
+The providers listed in `oauth2_clientsIncludeAdmin` and `oauth2_clientsIncludeUser` must also be in `oauth2_clients`.
+
+## Predefined providers
+
+For popular providers, only `clientId` and `clientSecret` are required.
+
+<AccordionGroup>
+  <Accordion title="Google">
+
+    ```properties
+    oauth2_googleClientId=your-google-client-id.apps.googleusercontent.com
+    oauth2_googleClientSecret=your-google-client-secret
+    oauth2_googleDefaultGroups=1,2
+    ```
+
+    Create credentials in the [Google API Console](https://console.developers.google.com/) under **Credentials**. Set the redirect URI to:
+
+    ```
+    https://your-domain.com/login/oauth2/code/google
+    ```
+
+  </Accordion>
+  <Accordion title="Facebook">
+
+    ```properties
+    oauth2_facebookClientId=your-facebook-app-id
+    oauth2_facebookClientSecret=your-facebook-app-secret
+    oauth2_facebookDefaultGroups=1,3
+    ```
+
+    Create an app at [Facebook for Developers](https://developers.facebook.com/docs/facebook-login). Set the redirect URI to:
+
+    ```
+    https://your-domain.com/login/oauth2/code/facebook
+    ```
+
+  </Accordion>
+  <Accordion title="GitHub">
+
+    ```properties
+    oauth2_githubClientId=your-github-client-id
+    oauth2_githubClientSecret=your-github-client-secret
+    oauth2_githubDefaultGroups=1,4
+    ```
+
+  </Accordion>
+  <Accordion title="Okta">
+
+    ```properties
+    oauth2_oktaClientId=your-okta-client-id
+    oauth2_oktaClientSecret=your-okta-client-secret
+    oauth2_oktaDefaultGroups=1,5
+    ```
+
+  </Accordion>
+</AccordionGroup>
+
+`oauth2_{provider}DefaultGroups` sets the WebJET user group IDs (comma-separated) that are assigned to newly created users for that provider. These defaults apply only on first login; manual changes to the user's groups are preserved on subsequent logins.
+
+## Custom providers (Keycloak and others)
+
+For providers not on the predefined list, set all OAuth2 endpoints explicitly. The variable names are built from the provider name:
+
+```properties
+oauth2_keycloakClientId=webjetcms-client
+oauth2_keycloakClientSecret=your-client-secret
+oauth2_keycloakAuthorizationUri=https://keycloak.example.com/realms/myrealm/protocol/openid-connect/auth
+oauth2_keycloakTokenUri=https://keycloak.example.com/realms/myrealm/protocol/openid-connect/token
+oauth2_keycloakUserInfoUri=https://keycloak.example.com/realms/myrealm/protocol/openid-connect/userinfo
+oauth2_keycloakJwkSetUri=https://keycloak.example.com/realms/myrealm/protocol/openid-connect/certs
+oauth2_keycloakIssuerUri=https://keycloak.example.com/realms/myrealm
+oauth2_keycloakUserNameAttributeName=email
+oauth2_keycloakScopes=openid,profile,email
+oauth2_keycloakClientName=Keycloak Login
+```
+
+<Tip>
+  You can configure multiple providers of the same type simultaneously, for example `keycloak-admins` and `keycloak-users`, each with their own set of variables.
+</Tip>
+
+## Redirect URI
+
+The redirect URI is automatically constructed for all providers:
+
+```
+{baseUrl}/login/oauth2/code/{registrationId}
+```
+
+For example: `https://your-domain.com/login/oauth2/code/keycloak`
+
+Register this URI as an allowed redirect in your identity provider's client configuration.
+
+## Token attributes
+
+WebJET extracts the following attributes from the OAuth2/OIDC token:
+
+| Attribute | Required | Usage |
+|-----------|----------|-------|
+| `email` | Yes | Identifies the user (must be unique) |
+| `given_name` | No | First name |
+| `family_name` | No | Last name |
+| `preferred_username` | No | Login name (default; configurable via `oauth2_usernameAttribute`) |
+| `picture` | No | Profile picture URL |
+| `groups` / `roles` / `group_membership` | No | Group list for synchronization |
+| `realm_access.roles` | No | Keycloak realm roles |
+| `resource_access.<client>.roles` | No | Keycloak client-specific roles |
+
+### Configuring the login name attribute
+
+By default, the login name is taken from `preferred_username`. To use a different attribute:
+
+```properties
+oauth2_usernameAttribute=customerNumber
+```
+
+If the configured attribute is not present in the token, the part of the email before the `@` is used as a fallback.
+
+## Group and rights synchronization
+
+By default, groups are not synchronized — only the `DefaultGroups` set at first login applies. To enable full group synchronization for a provider, add it to `oauth2_clientsWithPermissions`:
+
+```properties
+oauth2_clientsWithPermissions=keycloak,okta
+```
+
+On each login for a configured provider, WebJET:
+1. Extracts group/role names from the token.
+2. Removes all existing group assignments for the user.
+3. Adds assignments for WebJET groups whose names match the token groups.
+
+**Admin zone vs. customer zone behavior:**
+
+| | Admin zone | Customer zone |
+|--|-----------|--------------|
+| User groups synchronized | Yes | Yes |
+| Permission groups synchronized | Yes | No |
+| Admin flag set from groups | Yes | No |
+| Admin rights required to log in | Yes | No |
+
+### Automatic admin rights
+
+In the admin zone, a user is automatically granted admin rights if their OAuth2 groups include the group named in `NTLMAdminGroupName`:
+
+```properties
+NTLMAdminGroupName=webjet-admin
+```
+
+<Warning>
+  If a user in the admin zone does not have admin rights after group synchronization, the login is rejected with an `accessDenied` error.
+</Warning>
+
+## Keycloak setup guide
+
+<Steps>
+  <Step title="Create a realm">
+    In the Keycloak admin console, create a new realm (e.g. `webjetcms`).
+  </Step>
+  <Step title="Create a client">
+    Under **Clients → Create client**:
+    - **Client type:** OpenID Connect
+    - **Client ID:** `webjetcms-client`
+    - **Client authentication:** ON (confidential)
+    - **Standard flow:** ON
+    - **Direct access grants:** OFF (recommended for production)
+
+    In **Login settings**, set **Valid redirect URIs** to:
+    ```
+    https://your-domain.com/login/oauth2/code/keycloak
+    ```
+
+    Save, then copy the **Client secret** from the **Credentials** tab.
+  </Step>
+  <Step title="Create groups">
+    Under **Groups**, create groups with the **same names** as your WebJET user groups and permission groups. For example:
+    - `webjet-admin` — users who should receive admin rights
+    - `editors` — content editors
+
+    Add users to the appropriate groups.
+  </Step>
+  <Step title="Create token mappers">
+    By default Keycloak does not include groups in the ID token. Add mappers in the client's dedicated scope (**Clients → your client → Client scopes → dedicated scope → Add mapper**):
+
+    **Group Membership mapper:**
+    - Token Claim Name: `groups`
+    - Full group path: OFF
+    - Add to ID token: ON
+    - Add to userinfo: ON
+
+    **User Client Role mapper** (for client roles):
+    - Token Claim Name: `resource_access.webjetcms-client.roles`
+    - Add to ID token: ON
+    - Add to userinfo: ON
+  </Step>
+  <Step title="Configure WebJET">
+    Set these configuration variables in **Settings → Configuration**:
+
+    ```properties
+    oauth2_clients=keycloak
+    oauth2_clientsWithPermissions=keycloak
+    oauth2_keycloakClientId=webjetcms-client
+    oauth2_keycloakClientSecret=<client-secret-from-keycloak>
+    oauth2_keycloakAuthorizationUri=https://keycloak.example.com/realms/webjetcms/protocol/openid-connect/auth
+    oauth2_keycloakTokenUri=https://keycloak.example.com/realms/webjetcms/protocol/openid-connect/token
+    oauth2_keycloakUserInfoUri=https://keycloak.example.com/realms/webjetcms/protocol/openid-connect/userinfo
+    oauth2_keycloakJwkSetUri=https://keycloak.example.com/realms/webjetcms/protocol/openid-connect/certs
+    oauth2_keycloakIssuerUri=https://keycloak.example.com/realms/webjetcms
+    oauth2_keycloakUserNameAttributeName=email
+    oauth2_keycloakScopes=openid,profile,email
+    oauth2_keycloakClientName=Keycloak Login
+    NTLMAdminGroupName=webjet-admin
+    ```
+
+    Restart the application server.
+  </Step>
+  <Step title="Test login">
+    Go to `https://your-domain.com/admin/logon/` and click the **Keycloak Login** button. After logging in, verify in the WebJET admin interface that the user's name, login, group assignments, and admin flag are correct.
+  </Step>
+</Steps>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="oauth2_email_not_found">
+    The provider did not return an email attribute. Check that:
+    - The user has an email address set in the provider.
+    - The `email` scope is included in `oauth2_{provider}Scopes`.
+  </Accordion>
+  <Accordion title="accessDenied">
+    The user does not have admin rights after group synchronization. Check that:
+    - `NTLMAdminGroupName` matches the group name exactly.
+    - The user is a member of that group in the provider.
+    - The group is included in the token (mapper is configured).
+  </Accordion>
+  <Accordion title="Groups do not synchronize">
+    - Verify the provider is listed in `oauth2_clientsWithPermissions`.
+    - Confirm that group names in the provider exactly match WebJET group names.
+    - Enable DEBUG logging and check the logs for group extraction details.
+  </Accordion>
+  <Accordion title="Redirect URI mismatch">
+    The provider rejects the redirect URI. In the provider's client configuration, add the exact redirect URI:
+    ```
+    https://your-domain.com/login/oauth2/code/<registrationId>
+    ```
+    For Keycloak in local development: `http://localhost/login/oauth2/code/keycloak`
+  </Accordion>
+  <Accordion title="Login name is a UUID">
+    The `preferred_username` attribute in the token contains an internal UUID. Set `oauth2_usernameAttribute` to a different attribute (e.g. `customerNumber` or `identityName`):
+    ```properties
+    oauth2_usernameAttribute=customerNumber
+    ```
+  </Accordion>
+  <Accordion title="Keycloak endpoints not reachable from WebJET server">
+    The token URI, userinfo URI, and JWK Set URI require server-to-server connectivity. If WebJET runs in Docker, use `host.docker.internal` instead of `localhost` in these URIs.
+  </Accordion>
+</AccordionGroup>

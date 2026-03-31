@@ -1,0 +1,196 @@
+---
+title: "Frontend development overview"
+description: "Introduction to frontend development in WebJET CMS — template system, the Ninja starter kit, build tools, and key concepts for WebJET 2023+."
+keywords: ["frontend", "templates", "thymeleaf", "ninja", "jsp", "webpack", "build tools"]
+---
+
+This guide is for frontend developers preparing the design of a WebJET 2023-based site. It covers the template system, the Ninja starter kit, build tools, and the key concepts you need before diving into template or block development.
+
+## Role of the frontend developer
+
+As a frontend developer working with WebJET CMS you are responsible for:
+
+- Creating HTML/Thymeleaf template files that control page layout
+- Building the CSS and JavaScript assets used by those templates
+- Defining Page Builder blocks that content editors insert into pages
+- Configuring CKEditor styles and toolbar options for the editing experience
+
+You work primarily in the `/templates/INSTALL_NAME/` directory of the project. Backend developers handle Java applications in `/components/` and `/apps/`; you customise the output of those applications by copying their view files into an install-name-scoped folder.
+
+## Template system
+
+WebJET CMS renders pages by combining a **virtual template** (defined in the admin area) with include files for the header, footer, menu, and the actual page text.
+
+<CardGroup cols={3}>
+  <Card title="Thymeleaf" icon="code">
+    The current approach for WebJET 2023+. Templates are HTML files processed by Thymeleaf with `data-th-*` attributes so they render in a browser without a running server.
+  </Card>
+  <Card title="JSP" icon="file-code">
+    Used in the Ninja Starter Kit and legacy WebJET 8 templates. JSP files use `<iwcm:write>` tags and `${ninja.*}` EL expressions.
+  </Card>
+  <Card title="Freemarker / older" icon="clock">
+    Freemarker was used in earlier versions and is still supported for existing sites, but new projects should use Thymeleaf.
+  </Card>
+</CardGroup>
+
+<Note>
+WebJET 2023+ uses Thymeleaf over `data-*` attributes exclusively. Never use attributes like `th:text` — always write them as `data-th-text`. This allows the HTML file to be opened directly in a browser for prototyping without WebJET running.
+</Note>
+
+## WebJET 8 vs WebJET 2023+
+
+| Aspect | WebJET 8 | WebJET 2023+ |
+|---|---|---|
+| Template language | JSP with `<iwcm:write>` tags | Thymeleaf with `data-th-*` / `data-iwcm-*` attributes |
+| File suffix | `.jsp` | `.html` (or `.jsp` for legacy) |
+| In-browser prototyping | Not possible | Possible — static values shown when opened directly |
+| Asset pipeline | Manual or custom | npm + webpack/gulp via Ninja Starter Kit |
+| Page editor | Standard CKEditor | Standard CKEditor or Page Builder |
+| Component customisation | Copy to `/components/INSTALL_NAME/` | Same, plus `/apps/INSTALL_NAME/` for Spring apps |
+
+<Info>
+Sections not described in this guide work the same as in WebJET 8. Refer to the WebJET 8 manual for those areas.
+</Info>
+
+## Ninja Starter Kit
+
+The **Ninja Starter Kit** is the recommended starting point for new WebJET 2023+ projects. It is a sample template in JSP format using Ninja objects from WebJET CMS.
+
+### Components of the kit
+
+**Ninja Starter Kit = Ninja Boilerplate + Ninja Java + Ninja Script + Ninja Style**
+
+| Part | Purpose |
+|---|---|
+| Ninja Boilerplate | Base HTML structure (`home-page.jsp`, `sub-page.jsp`, include partials) |
+| Ninja Java | Java-side objects exposed as `${ninja.*}` in templates |
+| Ninja Script | JavaScript utilities and plugins |
+| Ninja Style | SCSS architecture and variables |
+
+### Installation
+
+<Steps>
+  <Step title="Copy the starter kit">
+    Copy the Ninja Starter Kit from the ZIP archive to your project at `/templates/INSTALL_NAME/`. Rename the `ninja-starter-kit` folder to your chosen template name.
+  </Step>
+  <Step title="Set SCSS variables">
+    Open `ninja-starter-kit/assets/scss/2-helpers/_variables.scss` and set:
+    - `$wj-install-name` — the name of the main folder in `/templates` (equals the `installName` constant in WebJET)
+    - `$wj-template-name` — the name of the template root folder if you renamed it
+  </Step>
+  <Step title="Check breakpoints">
+    Breakpoints in `_variables.scss` default to Bootstrap 4 values. These are also passed to the Ninja JavaScript plugin, so keep them consistent with your CSS framework.
+  </Step>
+  <Step title="Register the template in admin">
+    Create a template group and template in the WebJET admin area, pointing the HTML template field to your new template file.
+  </Step>
+</Steps>
+
+## Directory structure
+
+A typical template directory under `/templates/INSTALL_NAME/` looks like:
+
+```
+/templates/INSTALL_NAME/
+├── home-page.html          # or home-page.jsp — main layout for homepage
+├── sub-page.html           # layout for sub-pages
+├── includes/
+│   ├── head.html           # <head> section — meta, CSS, JS links
+│   ├── header.html         # site header / navigation
+│   ├── footer.html         # site footer
+│   └── breadcrumb.html     # breadcrumb navigation bar
+├── pagebuilder/            # Page Builder block files
+│   ├── section/
+│   ├── container/
+│   ├── column/
+│   └── content/
+├── assets/
+│   └── scss/               # SCSS source files
+│       ├── 2-helpers/
+│       │   └── _variables.scss
+│       └── ...
+└── dist/
+    ├── css/
+    │   ├── ninja.min.css   # compiled CSS
+    │   └── editor.css      # overrides applied only in the admin editor
+    └── js/
+        └── ninja.min.js    # compiled JavaScript
+```
+
+<Tip>
+The page editor in the admin area automatically loads `/templates/TEMPLATE_NAME/dist/css/editor.css` alongside the template CSS. Use this file to override styles that should only apply inside the editor, without affecting the live site.
+</Tip>
+
+## Build tools
+
+The Ninja Starter Kit uses **npm** as the package manager, with a build pipeline (webpack or gulp, depending on project setup) that:
+
+- Compiles SCSS to CSS and outputs `dist/css/ninja.min.css`
+- Bundles JavaScript dependencies including jQuery (via npm) and outputs `dist/js/ninja.min.js`
+- Copies `.properties` files and block images for Page Builder
+
+Because jQuery is bundled into `ninja.min.js`, you signal this to WebJET by including `${ninja.webjet.pageFunctionsPath}` in the `data-iwcm-combine` attribute. This prevents WebJET from injecting a second copy of jQuery.
+
+## Key concepts
+
+### Template
+
+A **template** is defined in the WebJET admin area under Templates. It specifies:
+
+- The HTML/JSP file to use for page layout
+- The main and secondary CSS styles
+- The header, footer, menu, and optional content pages to inject
+- The page editor type (Standard, HTML editor, or Page Builder)
+- The installation name (affects which component versions are used)
+
+Templates are grouped into **template groups**, which provide shared metadata (site name, author, copyright) and can define optional custom fields for pages.
+
+### Layout and include files
+
+The template HTML file is the outermost shell of a page. It includes partials for the `<head>` section, header, footer, and other regions. In Thymeleaf templates, partials are pulled in with `data-th-replace`:
+
+```html
+<header class="ly-header">
+  <div data-th-replace="/templates/INSTALL_NAME/includes/header.html"></div>
+</header>
+```
+
+In JSP-based templates the equivalent is:
+
+```jsp
+<%@ include file="includes/header.jsp" %>
+```
+
+### Page content insertion
+
+The actual text of a web page is injected into the template with the `data-iwcm-write` attribute:
+
+```html
+<!-- Inject page body text -->
+<article data-iwcm-write="doc_data" class="page-body">
+  <!-- Static prototype content — replaced at runtime by WebJET -->
+  <p>Lorem ipsum</p>
+</article>
+
+<!-- Inject header page defined in template settings -->
+<header data-iwcm-write="doc_head" data-iwcm-remove="tag" />
+```
+
+`data-iwcm-remove="tag"` removes the wrapper element, inserting only the content from WebJET.
+
+### CSS and JS combining
+
+Use `data-iwcm-combine` to combine multiple CSS and JS files into a single request, reducing HTTP overhead:
+
+```html
+<combine
+  basePath="|${ninja.temp.basePath}dist/|"
+  data-iwcm-combine="${ninja.userAgent.blind ? 'css/blind-friendly.min.css' : ''}
+  ${ninja.webjet.pageFunctionsPath}"
+>
+  <link href="css/ninja.min.css" rel="stylesheet" type="text/css"/>
+  <script src="js/ninja.min.js" type="text/javascript"></script>
+</combine>
+```
+
+The `<link>` and `<script>` tags inside `<combine>` are used as-is when the HTML file is opened in a browser. When served via WebJET, they are processed into a combined file URL with a cache-busting `?v=` parameter.

@@ -1,0 +1,368 @@
+---
+title: "Spring events"
+description: "How to publish and listen for application events in WebJET CMS — covering standard WebJET events, DataTable-specific events, and custom text-code replacement."
+keywords: ["spring events", "ApplicationEvent", "WebjetEvent", "DatatableEvent", "event listener", "event publisher", "UpdateCodesEvent"]
+---
+
+WebJET CMS uses the standard Spring application-event mechanism to decouple components. Any bean can publish an event; any `@Component` can listen for it. Both synchronous and asynchronous delivery are supported.
+
+A detailed introduction to Spring events is available at [Baeldung: Spring Events](https://www.baeldung.com/spring-events).
+
+## The WebjetEvent carrier
+
+Most WebJET events are transported by the generic class `WebjetEvent<T>`. It holds three fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `source` | `T` | The domain object (e.g. `DocDetails`, `GroupDetails`) |
+| `eventType` | `WebjetEventType` | The lifecycle stage of the event |
+| `clazz` | `String` | Fully-qualified class name of the source — used for filtering in `@EventListener` conditions |
+
+### Event types
+
+The `WebjetEventType` enum defines the standard lifecycle stages:
+
+| Value | When it fires |
+|-------|--------------|
+| `ON_START` | At the beginning of the operation — source object can still be modified |
+| `AFTER_SAVE` | After the object has been persisted |
+| `ON_DELETE` | Immediately before deletion |
+| `AFTER_DELETE` | After deletion completes |
+| `ON_XHR_FILE_UPLOAD` | After a file is uploaded via `/XhrFileUpload` |
+| `ON_END` | At the end of an operation that does not save (i.e. when `AFTER_SAVE` is not fired) |
+
+## Standard WebJET events
+
+WebJET publishes `WebjetEvent` for all core CMS operations:
+
+<AccordionGroup>
+  <Accordion title="Web page — save">
+    Published by `EditorFacade.save` before and after persisting a page.
+
+    - **Payload type:** `DocDetails`
+    - **Condition filter:** `#event.clazz eq 'sk.iway.iwcm.doc.DocDetails'`
+
+    To distinguish a full publish from saving a draft, check `doc.getEditorFields().isRequestPublish()` — it returns `false` for working-version saves.
+  </Accordion>
+
+  <Accordion title="Web page — delete">
+    Published by `DeleteServlet.deleteDoc` before and after deletion.
+
+    - **Payload type:** `DocDetails`
+    - **Condition filter:** `#event.clazz eq 'sk.iway.iwcm.doc.DocDetails'`
+  </Accordion>
+
+  <Accordion title="Directory (group) — save and delete">
+    Published by `GroupsDB.setGroup` and `GroupsDB.deleteGroup`.
+
+    - **Payload type:** `GroupDetails`
+    - **Condition filter:** `#event.clazz eq 'sk.iway.iwcm.doc.GroupDetails'`
+  </Accordion>
+
+  <Accordion title="Web page — frontend display">
+    Two events are published when a page is rendered.
+
+    - `ON_START` — after `DocDetails` is retrieved; `doc` is not yet set, only `docId`. Set `forceShowDoc` on the `DocDetails` object here to override the displayed page.
+    - `ON_END` — before routing to the JSP template; `doc` contains the fully populated `DocDetails`.
+
+    - **Payload type:** `ShowDocBean`
+    - **Condition filter:** `#event.clazz eq 'sk.iway.iwcm.doc.ShowDocBean'`
+  </Accordion>
+
+  <Accordion title="Web page — scheduled publish">
+    Published when a page is published on a timer.
+
+    - **Payload type:** `DocumentPublishEvent` (contains `DocDetails` and `oldVirtualPath`)
+    - **Event type:** `ON_PUBLISH`
+    - **Condition filter:** `#event.clazz eq 'sk.iway.iwcm.system.spring.events.DocumentPublishEvent'`
+  </Accordion>
+
+  <Accordion title="Configuration variable — create / change">
+    Published by `ConfDB.setName` after a configuration variable is saved through the UI.
+
+    - **Payload type:** `ConfDetails`
+    - **Condition filter:** `#event.clazz eq 'sk.iway.iwcm.system.ConfDetails'`
+  </Accordion>
+
+  <Accordion title="File upload">
+    Published after a file upload to `/XhrFileUpload`.
+
+    - **Payload type:** `java.io.File`
+    - **Event type:** `ON_XHR_FILE_UPLOAD`
+    - **Condition filter:** `#event.clazz eq 'java.io.File'`
+  </Accordion>
+</AccordionGroup>
+
+## DataTable events
+
+WebJET automatically publishes `DatatableEvent<T>` for every CRUD operation performed through `DatatableRestControllerV2`. These events are available for **all** datatable-backed entities without any extra configuration.
+
+### DatatableEvent fields
+
+| Field | Description |
+|-------|-------------|
+| `source` | The entity being operated on |
+| `eventType` | `DatatableEventType` lifecycle stage |
+| `clazz` | Fully-qualified entity class name |
+| `originalEntity` | The entity as it was before saving (available on `AFTER_SAVE`) |
+| `entityId` | ID of the deleted record (available on `AFTER_DELETE`) |
+| `originalId` | ID of the record that was duplicated (available on `AFTER_DUPLICATE`) |
+
+### DataTable event types
+
+| Value | When it fires |
+|-------|--------------|
+| `BEFORE_SAVE` | After `beforeSave()` is called, before the entity is written |
+| `AFTER_SAVE` | After `afterSave()` is called, entity is already persisted |
+| `BEFORE_DELETE` | After `beforeDelete()` returns `true`, before deletion |
+| `AFTER_DELETE` | After `afterDelete()` is called |
+| `BEFORE_DUPLICATE` | After `beforeDuplicate()`, before the copy is written |
+| `AFTER_DUPLICATE` | After `afterDuplicate()`, copy is already persisted |
+
+<Note>
+  Events are published **after** the corresponding hook method (`beforeSave`, `afterSave`, etc.) is called — even if you override those methods in a subclass of `DatatableRestControllerV2`. You cannot suppress event publishing by overriding the hook.
+</Note>
+
+Events are also published during bulk operations: imports and bulk column updates (`editItemByColumn`). When importing large datasets this can result in many events firing in quick succession — consider using `@Async` listeners for expensive operations in those scenarios.
+
+### AFTER_SAVE: saved vs. original entity
+
+In an `AFTER_SAVE` listener:
+
+- `event.getSource()` — the **saved** entity with its database-assigned ID
+- `event.getOriginalEntity()` — the entity **as received** by the REST call (ID is `0` or `null` for new records)
+
+Use `original.getUserId() == null || original.getUserId() < 1` to detect whether a record was created or updated.
+
+## Listening for events
+
+Implement a `@Component` with a method annotated `@EventListener`. Use the `condition` attribute to filter by `clazz` and optionally by `eventType`.
+
+<Warning>
+  Generic type inference alone is not sufficient for filtering — always include an explicit `condition` matching on `#event.clazz` to avoid handling events for the wrong entity type.
+</Warning>
+
+### Synchronous listener
+
+Synchronous listeners run in the same thread as the publisher. You can modify the source object before it is saved.
+
+```java
+package sk.iway.custom;
+
+import org.springframework.context.event.EventListener;
+import org.springframework.stereotype.Component;
+
+import sk.iway.iwcm.doc.GroupDetails;
+import sk.iway.iwcm.doc.DocDetails;
+import sk.iway.iwcm.system.spring.events.WebjetEvent;
+import sk.iway.iwcm.system.spring.events.WebjetEventType;
+
+@Component
+public class SaveListener {
+
+    // Listen for all events on GroupDetails
+    @EventListener(condition = "#event.clazz eq 'sk.iway.iwcm.doc.GroupDetails'")
+    public void handleGroupSave(final WebjetEvent<GroupDetails> event) {
+        // event.getSource() is the GroupDetails object
+    }
+
+    // Filter by both entity class and event type
+    @EventListener(condition = "#event.eventType.name() == 'AFTER_SAVE' && #event.clazz eq 'sk.iway.iwcm.doc.DocDetails'")
+    public void handleAfterSaveDoc(final WebjetEvent<DocDetails> event) {
+        // only fires after a DocDetails is persisted
+    }
+}
+```
+
+### Asynchronous listener
+
+Add `@Async` to run the listener in a separate thread. The publisher does not wait for it to complete. Async support is enabled globally by `@EnableAsync` in `BaseSpringConfig`.
+
+```java
+package sk.iway.custom;
+
+import org.springframework.context.event.EventListener;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.stereotype.Component;
+
+import sk.iway.iwcm.Logger;
+import sk.iway.iwcm.doc.GroupDetails;
+import sk.iway.iwcm.system.spring.events.WebjetEvent;
+
+@Component
+public class SaveListenerAsync {
+
+    @EventListener(condition = "#event.clazz eq 'sk.iway.iwcm.doc.GroupDetails'")
+    @Async
+    public void handleGroupSaveAsync(final WebjetEvent<GroupDetails> event) {
+        Logger.debug(SaveListenerAsync.class,
+            "Group save async, type=" + event.getEventType()
+            + " thread=" + Thread.currentThread().getName());
+    }
+}
+```
+
+### DataTable listener examples
+
+<CodeGroup>
+
+```java Intercept before save
+package sk.iway.custom;
+
+import org.springframework.context.event.EventListener;
+import org.springframework.stereotype.Component;
+
+import sk.iway.iwcm.Logger;
+import sk.iway.iwcm.Tools;
+import sk.iway.iwcm.components.users.userdetail.UserDetailsEntity;
+import sk.iway.iwcm.system.datatable.events.DatatableEvent;
+import sk.iway.iwcm.system.datatable.events.DatatableEventType;
+
+@Component
+public class UserDatatableListener {
+
+    @EventListener(condition = "#event.clazz eq 'sk.iway.iwcm.components.users.userdetail.UserDetailsEntity'")
+    public void handleUserSave(final DatatableEvent<UserDetailsEntity> event) {
+        if (event.getEventType() == DatatableEventType.BEFORE_SAVE) {
+            UserDetailsEntity user = event.getSource();
+
+            // Modify entity data before it is written to the database
+            if (Tools.isEmpty(user.getFieldA())) {
+                user.setFieldA(user.getEditorFields().getLogin() + "@example.com");
+            }
+        }
+
+        if (event.getEventType() == DatatableEventType.AFTER_SAVE) {
+            UserDetailsEntity saved = event.getSource();
+            UserDetailsEntity original = event.getOriginalEntity();
+            Logger.debug(UserDatatableListener.class,
+                "User saved ID=" + saved.getId() + " originalId=" + original.getId());
+        }
+    }
+}
+```
+
+```java Detect create vs. update
+@EventListener(condition = "#event.clazz eq 'sk.iway.iwcm.components.users.userdetail.UserDetailsEntity'")
+public void handleUserAfterSave(final DatatableEvent<UserDetailsEntity> event) {
+    if (event.getEventType() == DatatableEventType.AFTER_SAVE) {
+        UserDetailsEntity saved = event.getSource();
+        UserDetailsEntity original = event.getOriginalEntity();
+
+        if (original.getUserId() == null || original.getUserId() < 1) {
+            Logger.debug(getClass(), "New user created with ID: " + saved.getUserId());
+        } else {
+            Logger.debug(getClass(), "User updated, ID: " + saved.getUserId());
+        }
+    }
+}
+```
+
+```java After delete (async notification)
+@Component
+public class DeleteNotificationListener {
+
+    @Autowired
+    private EmailService emailService;
+
+    @EventListener(condition = "#event.eventType.name() == 'AFTER_DELETE' && #event.clazz eq 'sk.iway.custom.ImportantEntity'")
+    @Async
+    public void notifyOnDelete(final DatatableEvent<ImportantEntity> event) {
+        Long deletedId = event.getEntityId();
+        emailService.sendNotification("Record deleted: " + deletedId);
+    }
+}
+```
+
+```java After duplicate
+@Component
+public class DuplicateListener {
+
+    @EventListener(condition = "#event.clazz eq 'sk.iway.iwcm.gallery.GalleryEntity'")
+    public void handleGalleryDuplicate(final DatatableEvent<GalleryEntity> event) {
+        if (event.getEventType() == DatatableEventType.AFTER_DUPLICATE) {
+            GalleryEntity newGallery = event.getSource();
+            Long originalId = event.getOriginalId();
+
+            Logger.debug(DuplicateListener.class,
+                "Gallery duplicated from ID " + originalId + " to ID " + newGallery.getId());
+        }
+    }
+}
+```
+
+</CodeGroup>
+
+## Publishing an event
+
+Use `WebjetEvent.publishEvent()` — a convenience method that delegates to `WebjetEventPublisher`. By convention, publish `ON_START` at the beginning of the operation and `AFTER_SAVE` after the data is persisted.
+
+```java
+public boolean setGroup(GroupDetails group) {
+    (new WebjetEvent<GroupDetails>(group, WebjetEventType.ON_START)).publishEvent();
+
+    // ... persist the group ...
+
+    (new WebjetEvent<GroupDetails>(newGroup, WebjetEventType.AFTER_SAVE)).publishEvent();
+    return true;
+}
+```
+
+## Updating codes in text
+
+If you need to add custom placeholder codes to page text (for example `!CUSTOM_CODE!`), use the `UpdateCodesEvent`. WebJET publishes this event before (`ON_START`) and after (`ON_END`) its own code-substitution pass in `DocTools.updateCodes`.
+
+In your listener, retrieve the `StringBuilder` from the event, replace your placeholders, and set the modified text back.
+
+```java
+package sk.iway.custom;
+
+import org.springframework.context.event.EventListener;
+import org.springframework.stereotype.Component;
+
+import sk.iway.iwcm.Tools;
+import sk.iway.iwcm.common.UpdateCodesEvent;
+import sk.iway.iwcm.system.spring.events.WebjetEvent;
+import sk.iway.iwcm.system.spring.events.WebjetEventType;
+
+@Component
+public class CustomCodesListener {
+
+    @EventListener(condition = "#event.clazz eq 'sk.iway.iwcm.common.UpdateCodesEvent'")
+    public void handleUpdateCodes(final WebjetEvent<UpdateCodesEvent> event) {
+        if (event.getEventType() != WebjetEventType.ON_START) {
+            return; // only process before WebJET's own substitution pass
+        }
+
+        UpdateCodesEvent updateCodesEvent = event.getSource();
+        StringBuilder text = updateCodesEvent.getText();
+
+        text = Tools.replace(text, "!CUSTOM_CODE!", "My Company VAT ID");
+        text = Tools.replace(text, "!COMPANY_NAME!", "My Company Ltd.");
+
+        updateCodesEvent.setText(text);
+    }
+}
+```
+
+The `UpdateCodesEvent` exposes the following fields:
+
+| Field | Description |
+|-------|-------------|
+| `text` | The page HTML text (modifiable via `setText`) |
+| `user` | Currently logged-in user |
+| `currentDocId` | ID of the page being rendered |
+| `request` | The current HTTP request |
+
+<Tip>
+  Use `ON_START` to replace codes before WebJET processes its own codes, or `ON_END` to replace codes after — for example, if your replacement text might itself contain standard WebJET codes that should be expanded.
+</Tip>
+
+## WebjetEvent vs. DatatableEvent
+
+| | `WebjetEvent` | `DatatableEvent` |
+|---|---|---|
+| **Use for** | Specific business operations (page save/delete, config change, file upload) | All CRUD operations on any datatable entity |
+| **Published by** | Core WebJET services (`EditorFacade`, `GroupsDB`, etc.) | `DatatableRestControllerV2` automatically |
+| **Modify data?** | Yes, in `ON_START` | Yes, in `BEFORE_SAVE` |
+| **Bulk operations** | Not applicable | Yes — fires once per record |

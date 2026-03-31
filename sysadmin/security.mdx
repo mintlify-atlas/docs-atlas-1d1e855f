@@ -1,0 +1,385 @@
+---
+title: "Security hardening"
+description: "Harden your WebJET CMS installation before going to production: configure HTTP security headers, restrict admin access, set password policies, and understand penetration testing guidance."
+keywords: ["security", "hardening", "penetration testing", "HTTP headers", "XSS", "CSRF", "CAPTCHA", "IP whitelist", "password policy", "audit", "responsible disclosure"]
+---
+
+Security in WebJET CMS depends on correct configuration and proper access rights. The settings on this page must be applied before going into production and reviewed at least quarterly, and always before scheduled security tests.
+
+<Warning>
+  Some settings below require an application server restart to take effect. Incorrect configuration — particularly around IP whitelisting and admin access — can lock you out of the administration.
+</Warning>
+
+## Permission groups
+
+WebJET CMS allows program files to be modified through the administration interface. Before running penetration tests or opening the system to editors, create dedicated permission groups and restrict who can hold sensitive rights.
+
+<AccordionGroup>
+  <Accordion title="User management group">
+    This group can modify permissions for any user or group — including granting themselves or others full system access. A user with these rights can compromise the entire installation.
+
+    Assign only the following rights to this group:
+    - **Administrators management** — allows setting permissions for administration users
+    - **Rights groups** — allows setting permissions on groups
+  </Accordion>
+  <Accordion title="Programmer group">
+    Programmers sometimes need to apply hotfixes directly through WebJET CMS. A user with this group can upload malicious code capable of executing any operation on the server.
+
+    Rights for this group:
+    - **Unlimited file uploads** (extensions and sizes)
+    - **Configuration — view all variables**
+    - **Text editing — view all texts**
+
+    Also requires write permission on the file system for:
+    - `/apps` — application code
+    - `/components` — application code
+    - `/templates` — design templates
+
+    If you deploy from a Git repository and do not need hotfixes via WebJET CMS, omit the above directories entirely and grant write access only to:
+    - `/images`, `/files`, `/shared` — editor-uploaded media
+    - `/WEB-INF/tmp` — temporary files
+    - `/WEB-INF/imgcache` — generated image thumbnails
+    - `/WEB-INF/formfiles` — files uploaded through website forms
+  </Accordion>
+</AccordionGroup>
+
+<Note>
+  No other user groups or individual users should hold the sensitive rights described above.
+</Note>
+
+## Blocked file paths
+
+The configuration variable `pathFilterBlockedPaths` contains a comma-separated list of URL patterns that WebJET blocks. Any request whose URL contains one of these patterns returns an error. The default blocked patterns are:
+
+```
+.DS_Store, debug., config.properties, Thumbs.db, .git, .svn
+```
+
+Add additional patterns as needed for your environment.
+
+## Admin access restriction
+
+### IP whitelisting
+
+Restrict the `/admin` path to known IP addresses using `adminEnabledIPs`. Set it to a comma-separated list of allowed IPs:
+
+```
+adminEnabledIPs=203.0.113.10,10.0.0.
+```
+
+To use a dedicated domain for the administration instead of a path restriction, set `multidomainAdminHost=cms.yourdomain.example`. Requests to `/admin` on all other domains will return a 404 error.
+
+### Two-factor authentication
+
+Set `isGoogleAuthRequiredForAdmin=true` to require two-factor authentication for all administration logins. Each user must set up 2FA in advance under their account name → **Two-step verification**, or at `/admin/2factorauth.jsp`.
+
+<Tip>
+  Require two-factor authentication at minimum for all accounts that can manage user accounts, permissions, or system configuration.
+</Tip>
+
+## File upload restrictions
+
+Restrict what editors can upload to limit the risk of malicious file uploads.
+
+<AccordionGroup>
+  <Accordion title="Upload size limits">
+    | Variable | Default | Recommended |
+    |----------|---------|-------------|
+    | `FCKConfig.UploadMaxSize[Default][image]` | `0` (unlimited) | `10000` (10 MB) |
+    | `FCKConfig.UploadMaxSize[Basic][image]` | `2048` (2 MB) | 2048 |
+    | `FCKConfig.UploadMaxSize[Default][file]` | `0` (unlimited) | `50000` (50 MB) |
+    | `FCKConfig.UploadMaxSize[Basic][file]` | `2048` (2 MB) | 2048 |
+
+    The `[Basic]` variants apply to users who do not have the **Complete menu in the editor** right.
+  </Accordion>
+  <Accordion title="Allowed file type restrictions">
+    | Variable | Default | Recommended |
+    |----------|---------|-------------|
+    | `FCKConfig.UploadFileTypes[Default][image]` | empty (no restriction) | `jpg,jpeg,png,gif,svg,mp3,mp4` |
+    | `FCKConfig.UploadFileTypes[Basic][image]` | `jpg,jpeg,png,gif,mp4` | keep default |
+    | `FCKConfig.UploadFileTypes[Default][file]` | empty (no restriction) | `pdf,docx,xlsx,pptx,ppsx,zip,rtf` |
+    | `FCKConfig.UploadFileTypes[Basic][file]` | `doc,docx,xls,xlsx,pdf,zip,rtf` | keep default |
+
+    Consider whether to allow SVG uploads — see the note on SVG XSS below.
+  </Accordion>
+  <Accordion title="Directory write control">
+    Set `defaultDisableUpload=true` to restrict all users to writing only in explicitly configured directories. Without any configured directories, no writes are permitted.
+
+    Set `fbrowserShowOnlyWritableFolders=true` to hide directories that the user cannot write to (by default, unwritable directories are visible but not editable).
+  </Accordion>
+</AccordionGroup>
+
+## HTTP security headers
+
+Configure HTTP response headers in **Settings → Configuration**. Headers marked with a recommended value should be set before going into production.
+
+<AccordionGroup>
+  <Accordion title="Core security headers">
+    | Variable | Default | Description |
+    |----------|---------|-------------|
+    | `xXssProtection` | `1; mode=block` | `X-XSS-Protection` header |
+    | `xFrameOptions` | `SAMEORIGIN` | `X-Frame-Options` — CSRF framing protection |
+    | `xContentTypeOptions` | `nosniff` | `X-Content-Type-Options` — prevents MIME sniffing |
+    | `strictTransportSecurity` | empty | Set to `max-age=31536000 ; includeSubDomains` once your site is fully on HTTPS |
+    | `refererPolicy` | `same-origin` | `Referrer-Policy` header |
+    | `serverName` | `unknown` | `Server` response header value — keep this at `unknown` or a non-descriptive value |
+  </Accordion>
+  <Accordion title="Content Security Policy">
+    | Variable | Description |
+    |----------|-------------|
+    | `contentSecurityPolicy` | Sets the `Content-Security-Policy` header. Empty by default (header not sent). For HTTPS sites, recommended value: `default-src 'none'; script-src https: blob: data: 'unsafe-inline' 'unsafe-eval'; worker-src https: blob:; child-src https: blob:; style-src https: data: 'unsafe-inline' 'unsafe-eval'; img-src https: data: 'unsafe-inline'; font-src https: data:; object-src blob: 'self'; base-uri 'none'; frame-ancestors 'self'; connect-src blob: 'self'; frame-src 'self'` |
+    | `contentSecurityPolicySvg` | Separate CSP value for SVG images. WebJET sets this to `default-src 'self'` by default to prevent JavaScript execution in directly opened SVG files. |
+    | `featurePolicyHeader` | `Feature-Policy` / `Permissions-Policy` header (e.g. `microphone 'none'; geolocation 'none'`). Empty by default. |
+  </Accordion>
+  <Accordion title="CORS (Access-Control) headers">
+    | Variable | Default | Description |
+    |----------|---------|-------------|
+    | `accessControlAllowOriginValue` | `{HTTP_PROTOCOL}://{SERVER_NAME}:{HTTP_PORT}` | `Access-Control-Allow-Origin` value |
+    | `accessControlAllowOriginUrls` | `/rest/,/private/rest/,/admin/rest/` | URL prefixes that receive the CORS header |
+    | `accessControlAllowHeaders` | `Origin, Accept, ...` | `Access-Control-Allow-Headers` value |
+    | `accessControlAllowMethods` | `HEAD,POST,GET,OPTIONS,PUT` | `Access-Control-Allow-Methods` value |
+    | `accessControlMaxAge` | `1800` | `Access-Control-Max-Age` value |
+    | `accessControlAllowedOrigins` | empty | If set, requests must include an `origin` header matching this list |
+
+    Macros available in values: `{HTTP_PROTOCOL}`, `{SERVER_NAME}`, `{DOMAIN_NAME}`, `{DOMAIN_ALIAS}`, `{HTTP_PORT}`, `{INSTALL_NAME}`, `{HEADER_ORIGIN}`.
+  </Accordion>
+  <Accordion title="Search engine indexing headers">
+    | Variable | Default | Description |
+    |----------|---------|-------------|
+    | `xRobotsTagValue` | `noindex, nofollow` | `X-Robots-Tag` header value |
+    | `xRobotsTagUrls` | `/components/,NOT_SEARCHABLE_PAGE` | URL prefixes that receive the `X-Robots-Tag` header. If `NOT_SEARCHABLE_PAGE` is in the list, the header is also applied to pages with search disabled. |
+  </Accordion>
+</AccordionGroup>
+
+For custom headers not covered by the variables above, use the **HTTP headers** application under **Settings**, or set the `responseHeaders` configuration variable with one entry per line in the format `url-prefix:header-name:value`:
+
+```
+/admin:X-Accel-Buffering:no
+/rest/calculators/:Access-Control-Allow-Origin:*
+```
+
+## Password policies
+
+<AccordionGroup>
+  <Accordion title="Administrator password rules">
+    | Variable | Default | Description |
+    |----------|---------|-------------|
+    | `passwordAdminMinLength` | `5` | Minimum password length |
+    | `passwordAdminMinCountOfSpecialSigns` | `0` | Minimum special characters |
+    | `passwordAdminMinUpperCaseLetters` | `1` | Minimum uppercase letters |
+    | `passwordAdminMinLowerCaseLetters` | `0` | Minimum lowercase letters |
+    | `passwordAdminMinCountOfDigits` | `1` | Minimum digits |
+    | `passwordAdminExpiryDays` | `0` | Days before password expires. `0` disables expiry. |
+  </Accordion>
+  <Accordion title="Password history and hashing">
+    | Variable | Default | Description |
+    |----------|---------|-------------|
+    | `passwordHistoryEnabled` | `true` | Prevents reuse of previously used passwords |
+    | `passwordHistoryLength` | `6` | Number of previous passwords remembered |
+    | `passwordHashAlgorithm` | `bcrypt` | Hashing algorithm: `bcrypt` or `sha-512`. BCrypt is used from version 2022.40. Older hash values are migrated to BCrypt on next password change. |
+    | `bcryptSaltRounds` | `12` | BCrypt cost factor (log₂ of rounds) |
+  </Accordion>
+  <Accordion title="Password reset">
+    | Variable | Default | Description |
+    |----------|---------|-------------|
+    | `passwordResetValidityInMinutes` | `30` | Time validity of the password reset link |
+    | `changePasswordPageUrl` | `/components/user/change_password.jsp` | URL of the password change page |
+  </Accordion>
+</AccordionGroup>
+
+The same password rules apply to password-protected website sections, using variables without the `Admin` segment (for example, `passwordMinUpperCaseLetters`).
+
+## Login blocking
+
+After repeated failed login attempts, WebJET blocks the IP address temporarily.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `logonBlockedDelay` | `10` | Seconds of delay after any failed login |
+| `logonBlockedAfterUnsuccessCount` | `5` | Number of failed attempts before the extended delay applies |
+| `logonLoginBlockedDelay` | `60` | Seconds of extended delay after exceeding `logonBlockedAfterUnsuccessCount` |
+
+During a lockout period, failed attempt counters are not incremented and the lockout timer is not extended.
+
+## Single session login
+
+Set `sessionSingleLogon=true` to allow only one active session per user at a time. When a user logs in again, their other active session is terminated — including on all nodes in a cluster. This also prevents credential sharing between multiple users.
+
+## LDAP authentication
+
+WebJET supports authentication against an LDAP server. Configure it with the following variables:
+
+<AccordionGroup>
+  <Accordion title="LDAP connection settings">
+    | Variable | Description |
+    |----------|-------------|
+    | `ldapProviderUrl` | LDAP server URL, e.g. `ldap://ldap.local:389/DC=company,DC=com??base` |
+    | `ldapUsername` | Technical user login for reading LDAP data |
+    | `ldapPassword` | Technical user password for reading LDAP data |
+    | `ldapUseSslProtocol` | Set to `true` to use SSL on port 636 |
+    | `ldapDomainAppend` | Domain suffix appended to the login name if required |
+    | `ldapSecurityPrincipalDn` | Custom `SECURITY_PRINCIPAL` string — `!USERNAME!` is replaced with the login name |
+    | `ldapFilter` | LDAP filter for account lookup (default: `(&(objectClass=Person) (&(sAMAccountName=!USERNAME!)))`) |
+    | `basicNtlmLogonAttrs` | Comma-separated list of LDAP attributes to read at login (leave empty to only verify the login without syncing user data) |
+  </Accordion>
+  <Accordion title="LDAP rights assignment">
+    After login, WebJET matches the user's LDAP group membership (`memberOf` attribute) against WebJET group names. Matching groups are automatically assigned.
+
+    | Variable | Description |
+    |----------|-------------|
+    | `NTLMAdminGroupName` | LDAP group name that grants administration access |
+    | `passwordProtectedAutoId` | Comma-separated user group IDs automatically assigned after login |
+  </Accordion>
+</AccordionGroup>
+
+## Tomcat application server hardening
+
+### Secure session cookie
+
+Set `secure="true"` on the Tomcat connector so the session cookie is only transmitted over HTTPS. Without this, the browser does not accept the cookie and sessions cannot be held.
+
+```xml
+<Connector
+    ...
+    secure="true"
+    useBodyEncodingForURI="true"
+    ...
+/>
+```
+
+### Suppress Tomcat version disclosure
+
+Prevent Tomcat from revealing its version in error responses by adding `ErrorReportValve` to the `<Host>` element in `server.xml`:
+
+```xml
+<Host ...>
+    <Valve className="org.apache.catalina.valves.ErrorReportValve"
+        showReport="false"
+        showServerInfo="false" />
+</Host>
+```
+
+### SameSite cookies
+
+Set the `SameSite` attribute on cookies to mitigate CSRF attacks. In Tomcat, configure this via `CookieProcessor` in `Context`:
+
+```xml
+<Context>
+    <CookieProcessor sameSiteCookies="strict"/>
+</Context>
+```
+
+### Default host configuration
+
+Set `defaultHost` in `server.xml` to a non-existent `<Host>` entry so the application server rejects requests for unknown domains rather than routing them to an unintended host:
+
+```xml
+<Engine name="Catalina" defaultHost="localhost">
+    <Host name="localhost" ...>
+        <Alias>admin.domain.example</Alias>
+    </Host>
+</Engine>
+```
+
+## Load balancer and WAF considerations
+
+### Load balancer
+
+- Route only known domains to application servers. Unknown domains should be rejected at the load balancer.
+- When `serverBeyoundProxy=true`, WebJET reads the visitor IP from the `X-Forwarded-For` header. Ensure the load balancer always sets this header — do not allow it to be passed from the internet. The same applies to `x-forwarded-proto`.
+
+### Web application firewall (WAF)
+
+WebJET's administration sends HTTP requests that may be flagged as XSS or SQL injection by a WAF (for example, saving a page with JavaScript in the HTML, or saving records in the Scripts application). Set WAF exceptions for:
+
+- `/admin/rest/web-pages`
+- `/admin/rest/components/insert-script`
+- `/admin/v9/settings/translation-keys`
+- `/admin/rest/settings/configuration`
+- `/admin/searchall.jsp`
+- `/admin/replaceall.jsp`
+- `/admin/updatedb.jsp`
+
+<Tip>
+  The ideal architecture is a dedicated CMS administration node on a private network, inaccessible from the internet. The WAF can then be omitted for that node entirely.
+</Tip>
+
+## Audit and change notifications
+
+Set up email notifications for security-relevant configuration changes under **Audit → Notification list**. Recommended event types:
+
+- `CONF_UPDATE` / `CONF_DELETE` — configuration variable changes
+- `PROP_UPDATE` / `PROP_DELETE` — translation key changes (JavaScript code can be inserted via translation keys)
+- `XSS` — detected XSS attempts
+- `SQLERROR` — database errors
+
+This ensures a security engineer is notified of changes that could indicate an attack.
+
+## Common penetration test findings
+
+<AccordionGroup>
+  <Accordion title="Sensitive Data Exposure — server version disclosure">
+    **Finding:** The web server type and version is revealed through error responses.
+
+    **Fix:** Set the `serverName` configuration variable to `unknown` or a non-descriptive value. Verify the `Server` response header in your browser's developer tools.
+  </Accordion>
+  <Accordion title="RCE via uploaded JSP file">
+    **Finding:** Arbitrary files including JSP can be uploaded, allowing command execution.
+
+    **Fix:** Configure file upload rights via `FCKConfig.Upload*` variables, and consider disabling write access to program file directories entirely.
+  </Accordion>
+  <Accordion title="Missing Secure cookie flag">
+    **Finding:** `JSESSIONID` does not have the `Secure` attribute.
+
+    **Fix:** Set `secure="true"` on the Tomcat connector in `server.xml`.
+  </Accordion>
+  <Accordion title="Missing HTTP Strict Transport Security">
+    **Finding:** The `Strict-Transport-Security` header is absent.
+
+    **Fix:** Set `strictTransportSecurity=max-age=31536000 ; includeSubDomains` in configuration.
+  </Accordion>
+  <Accordion title="Stored XSS via SVG image">
+    **Finding:** SVG files can embed JavaScript that executes when opened directly.
+
+    **Fix:** Restrict SVG upload permissions via `FCKConfig.UploadFileTypes`. WebJET also sets `Content-Security-Policy: default-src 'self'` on SVG file responses by default (configurable via `contentSecurityPolicySvg`).
+  </Accordion>
+  <Accordion title="Stored XSS via translation keys">
+    **Finding:** Users with access to translation texts can insert JavaScript code.
+
+    **Fix:** Limit access to the Text Translation application. Users without the **Edit texts — view all texts** right are restricted to keys listed in `propertiesEnabledKeys`, and their inputs are filtered to tags in `propAllowedTags` (default: `p,div,a,sub,sup,br,strong`) and attributes in `propAllowedAttrs` (default: `href,src,style,class,rel`). Set `propAllowedTags=-` to completely disallow HTML for these users. Also set up audit notifications for `PROP_UPDATE`.
+  </Accordion>
+  <Accordion title="Insecure Deserialization">
+    **Finding:** Web page import accepts serialised Java objects in XML that could be tampered with.
+
+    **Fix:** Do not grant normal users permission to modify configuration variables. The `XMLDecoderAllowedClasses` configuration variable controls allowed deserialisable types — dangerous types (`java.lang.Runtime`) are blocked by hardcoded logic regardless of configuration.
+  </Accordion>
+</AccordionGroup>
+
+## Responsible disclosure
+
+If you discover a security vulnerability in WebJET CMS, please report it privately rather than through public channels.
+
+<CardGroup cols={2}>
+  <Card title="Web form" icon="globe" href="https://www.interway.sk/sluzby-riesenia/zodpovedne-oznamovanie-zranitelnosti/">
+    Report via the responsible disclosure form on the Interway website.
+  </Card>
+  <Card title="GitHub" icon="github" href="https://github.com/webjetcms/webjetcms/security">
+    Use the GitHub "Report a vulnerability" feature on the WebJET CMS repository.
+  </Card>
+</CardGroup>
+
+You can also send reports by email to `zranitelnosti@interway.sk`. Use PGP key `38F5F695642A7A1C73AF6C7E90DC0AF8975E50AD` for encrypted communication.
+
+**Include in your report:**
+
+- Vulnerability type (e.g. SQL injection, XSS, authentication bypass)
+- File paths and source code location (tag/branch/commit or direct URL)
+- Steps to reproduce
+- Proof-of-concept or exploit code if available
+- Impact description and potential attack scenario
+
+**What to expect:** Interway will confirm receipt, verify the issue, fix it as quickly as complexity allows, and notify you when the fix is released.
+
+<Note>
+  Security updates are provided for the latest stable release of WebJET CMS. Running the latest version is strongly recommended.
+</Note>

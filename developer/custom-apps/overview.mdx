@@ -1,0 +1,311 @@
+---
+title: "Custom applications overview"
+description: "Learn what custom applications are in WebJET CMS, how the project structure works, and how to set up your development environment."
+---
+
+Custom applications let you embed server-side logic directly into WebJET CMS pages using Spring-based components. Each application is a Java class annotated with `@WebjetComponent` that renders its output into the page wherever you place an `!INCLUDE()!` tag.
+
+## What a custom application is
+
+A custom application is a Spring-managed Java class that extends `WebjetComponentAbstract`. It:
+
+- is embedded in any web page using the `!INCLUDE()!` directive
+- maps URL parameters to handler methods automatically
+- can accept parameters from the include tag (e.g. `country="sk"`)
+- renders output via Thymeleaf, Freemarker, or JSP templates
+
+```html
+!INCLUDE(sk.iway.basecms.contact.ContactApp, country="sk")!
+```
+
+The class name in the annotation must match the fully-qualified class name, making each application globally unique.
+
+## The basecms project and webjetcms
+
+The source code for a reference custom application project is available on GitHub at [github.com/webjetcms/basecms](https://github.com/webjetcms/basecms). The WebJET CMS core itself is at [github.com/webjetcms/webjetcms](https://github.com/webjetcms/webjetcms).
+
+Your custom project depends on the WebJET CMS library and provides its own Spring configuration, JPA entities, repositories, REST controllers, and Thymeleaf templates layered on top.
+
+<Note>
+Your application classes should live in the package `sk.iway.INSTALL_NAME` where `INSTALL_NAME` is the value of the `installName` configuration variable. WebJET scans this package automatically at startup.
+</Note>
+
+## Development environment setup
+
+WebJET CMS development uses [Visual Studio Code](https://code.visualstudio.com/) with a Gradle-based project.
+
+### Running the application server
+
+The project uses the [gretty](https://gretty-gradle-plugin.github.io/gretty-doc/) Gradle plugin to run an embedded Tomcat server. Key settings in `build.gradle`:
+
+```gradle
+gretty {
+    servletContainer = 'tomcat9'
+    contextPath = ''
+    httpPort = 80
+    inplaceMode = 'hard'
+    scanInterval = 1
+    scanner = 'jdk'
+    scanDir "${projectDir}/build/classes/java/main"
+    fastReload = true
+    reloadOnClassChange = false
+    debugSuspend = false
+    jvmArgs = [
+        '-Dfile.encoding=utf-8',
+        '-Xrunjdwp:transport=dt_socket,server=y,suspend=n,address=5005',
+        "-DwebjetDbname=${System.env.webjetDbname}",
+        "-Dwebjet.showDocActionAllowedDocids=4,383,390"
+    ]
+}
+```
+
+- `reloadOnClassChange = false` disables automatic Tomcat restarts when a class is recompiled, so hot-swap works correctly.
+- The `-Xrunjdwp` flag enables remote debugging on port 5005.
+
+### Debugging with VS Code
+
+Configure `.vscode/launch.json` with Java attach and optionally Chrome launch configurations:
+
+<CodeGroup>
+
+```json launch.json (Java + Chrome)
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "java",
+            "name": "Debug",
+            "request": "attach",
+            "hostName": "localhost",
+            "port": 5005,
+            "preLaunchTask": "appStart",
+            "postDebugTask": "appKill",
+            "timeout": 240000,
+            "internalConsoleOptions": "neverOpen"
+        },
+        {
+            "trace": true,
+            "name": "Launch Chrome",
+            "request": "launch",
+            "type": "chrome",
+            "url": "http://iwcm.interway.sk/showdoc.do?docid=4&NO_WJTOOLBAR=true&combineEnabledRequest=false",
+            "webRoot": "${workspaceRoot}/src/main/webapp",
+            "sourceMaps": true,
+            "disableNetworkCache": true,
+            "sourceMapPathOverrides": {
+                "webpack:///./~/*": "${webRoot}/node_modules/*",
+                "webpack:///./*": "${webRoot}/src/js/*",
+                "webpack:///*": "*"
+            }
+        }
+    ]
+}
+```
+
+</CodeGroup>
+
+<Tip>
+Hot-swap lets you change code inside existing methods without restarting Tomcat. Structural changes — adding new methods or changing method signatures — require a full restart.
+</Tip>
+
+<Warning>
+If VS Code shows a file with an error in an open tab (shown in red), the debug session may not start correctly. Close any files with errors before launching debug mode.
+</Warning>
+
+## Spring configuration
+
+Before your classes are recognized by WebJET, you must create two configuration files in your package.
+
+### SpringConfig.java
+
+Sets the packages that Spring will scan for your components:
+
+```java
+package sk.iway.basecms;
+
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+@ComponentScan({
+    "sk.iway.basecms",
+    "sk.iway.basecms.contact"
+})
+public class SpringConfig {
+
+}
+```
+
+### JpaDBConfig.java
+
+Configures Spring Data JPA repositories and entity scanning:
+
+```java
+package sk.iway.basecms;
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
+import org.springframework.orm.jpa.JpaTransactionManager;
+import org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean;
+import org.springframework.orm.jpa.vendor.EclipseLinkJpaVendorAdapter;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.EnableTransactionManagement;
+
+@Configuration("basecms:JpaDBConfig")
+@EnableTransactionManagement
+@EnableJpaRepositories(
+    entityManagerFactoryRef = "basecmsEntityManager",
+    transactionManagerRef = "basecmsTransactionManager",
+    basePackages = {
+        "sk.iway.basecms.contact"
+    }
+)
+public class JpaDBConfig {
+
+    @Bean("basecmsTransactionManager")
+    public PlatformTransactionManager transactionManager() {
+        JpaTransactionManager transactionManager = new JpaTransactionManager();
+        transactionManager.setEntityManagerFactory(entityManagerFactory().getObject());
+        return transactionManager;
+    }
+
+    @Bean("basecmsEntityManager")
+    public LocalContainerEntityManagerFactoryBean entityManagerFactory() {
+        LocalContainerEntityManagerFactoryBean emf = new LocalContainerEntityManagerFactoryBean();
+        emf.setPersistenceProvider(new WebJETPersistenceProvider());
+        emf.setDataSource(DBPool.getInstance().getDataSource("iwcm"));
+        emf.setJpaVendorAdapter(new EclipseLinkJpaVendorAdapter());
+        emf.setPersistenceUnitName("iwcm");
+        emf.setPackagesToScan("sk.iway.basecms.contact");
+        // ... JPA properties
+        return emf;
+    }
+}
+```
+
+<Warning>
+The `@Configuration` name, entity manager factory bean name, and transaction manager bean name must all be unique across your entire application. Use a prefix matching your project name.
+</Warning>
+
+### Customizing Spring Security
+
+If you need to adjust Spring Security settings, implement `sk.iway.iwcm.system.spring.ConfigurableSecurity` in your `SpringConfig`:
+
+```java
+import sk.iway.iwcm.system.spring.ConfigurableSecurity;
+
+public class SpringConfig implements ConfigurableSecurity {
+
+    @Override
+    public void configureSecurity(HttpSecurity http) throws Exception {
+        http.addFilterAfter(new ApiTokenAuthFilter(), BasicAuthenticationFilter.class);
+    }
+}
+```
+
+## Project structure
+
+A typical custom application follows this layout inside `src/main/`:
+
+```
+src/main/
+├── java/sk/iway/basecms/
+│   ├── SpringConfig.java          # @ComponentScan configuration
+│   ├── JpaDBConfig.java           # JPA/repository configuration
+│   └── contact/
+│       ├── ContactEntity.java     # JPA entity
+│       ├── ContactRepository.java # Spring Data repository
+│       ├── ContactRestController.java # REST controller for admin
+│       └── ContactApp.java        # Public-facing Spring MVC component
+└── webapp/
+    └── apps/contact/
+        ├── modinfo.properties     # Admin menu registration
+        ├── admin/
+        │   └── index.html         # Admin data table page
+        └── mvc/
+            ├── list.html          # Thymeleaf list template
+            └── edit.html          # Thymeleaf edit/add template
+```
+
+## Overriding existing applications
+
+WebJET searches for view files in a priority order that allows customer applications to override defaults. When a method returns a path such as `/components/contact/edit`, WebJET looks for the file in this order:
+
+```
+/components/{installName}/contact/{viewFolder}/edit.html
+/components/contact/{viewFolder}/edit.html
+/components/{installName}/contact/edit.html
+/components/contact/edit.html
+```
+
+Place a file earlier in this search path to override the built-in template without modifying the WebJET core.
+
+The `viewFolder` parameter can be passed through the `!INCLUDE()!` tag:
+
+```html
+!INCLUDE(sk.iway.basecms.contact.ContactApp, viewFolder="subfolder", country="sk")!
+```
+
+## Key concepts
+
+<AccordionGroup>
+  <Accordion title="@WebjetComponent annotation">
+    Marks a class as a WebJET application. The annotation value must be the fully-qualified class name. This registers the class as a Spring bean and enables the `!INCLUDE()!` directive to find and execute it.
+
+    ```java
+    @WebjetComponent("sk.iway.basecms.contact.ContactApp")
+    public class ContactApp extends WebjetComponentAbstract {
+    ```
+  </Accordion>
+
+  <Accordion title="@DefaultHandler annotation">
+    Marks the method that runs when no URL parameter matches another method name in the class. The annotated method can have any name. URL parameter routing is automatic: a URL parameter named `edit` causes the `edit()` method to be called.
+
+    ```java
+    @DefaultHandler
+    public String view(Model model, HttpServletRequest request) {
+        return "/apps/contact/mvc/list";
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="App registration in packages">
+    WebJET scans for `@WebjetComponent` annotations in:
+    - `sk.iway.iwcm` — standard WebJET CMS applications
+    - `sk.iway.INSTALL_NAME` — your customer applications (value of `installName` conf. variable)
+    - `sk.iway.LOG_INSTALL_NAME` — applications by logging install name
+    - Packages listed in the `springAddPackages` configuration variable
+
+    Applications in packages other than `sk.iway.iwcm` appear at the top of the App Store list.
+  </Accordion>
+
+  <Accordion title="Bean scope">
+    Application classes are scoped as `@Scope(value = WebApplicationContext.SCOPE_REQUEST, proxyMode = ScopedProxyMode.TARGET_CLASS)`. If the same application appears multiple times on one page, the class instance is reused across the HTTP request.
+  </Accordion>
+</AccordionGroup>
+
+## Testing
+
+For administration data tables, a base automated test is provided that you configure with a minimal test scenario. Create a file at `src/test/webapp/tests/apps/contact.js`:
+
+```javascript
+Feature('contact');
+
+Before(({ I, login }) => {
+    login('admin');
+    I.amOnPage("/apps/contact/admin/");
+});
+
+Scenario('contact-basic tests', async ({ I, DataTables, DTE }) => {
+    await DataTables.baseTest({
+        dataTable: 'dataTable',
+        perms: 'cmp_contact',
+        createSteps: function(I, options) {
+            DTE.fillField("zip", "85106");
+        }
+    });
+});
+```
+
+The `perms` value must match the `itemKey` defined in your `modinfo.properties` file.

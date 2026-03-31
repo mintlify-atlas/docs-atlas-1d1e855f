@@ -1,0 +1,230 @@
+---
+title: "Files and Media"
+description: "Upload and organise files, manage images with the built-in image editor, work with file history, and insert files into pages."
+---
+
+WebJET CMS provides two tools for managing files and documents: the **Explorer** (ElFinder) for general file management, and the **Document Manager** for versioned document publishing. Both are accessible from the Files section of the administration.
+
+---
+
+## Explorer (ElFinder)
+
+Explorer is the main file manager. It gives you a folder tree on the left, a workspace on the right, and a toolbar with actions across the top.
+
+### Opening Explorer
+
+Go to **Files → Explorer** in the administration menu, or access it directly from within the page editor via the Insert Image or Insert Link dialogs.
+
+### The interface
+
+| Area | Purpose |
+|---|---|
+| **Navigation bar** (left panel) | Folder tree — click to navigate, drag to move folders |
+| **Main workspace** (right panel) | Contents of the selected folder — files and subfolders |
+| **Toolbar** | Buttons for common actions, divided into File, Tools, and Export-Import tabs |
+
+### Uploading files
+
+<Steps>
+  <Step title="Navigate to the target folder">
+    Click the destination folder in the navigation bar.
+  </Step>
+  <Step title="Upload">
+    Click **Upload files** (the green + button) in the File tab to open a file picker, or drag files directly from your desktop onto the workspace.
+  </Step>
+</Steps>
+
+<Tip>
+  File names on the server should not contain spaces, special characters, or accented letters. Rename files before uploading if needed.
+</Tip>
+
+### Organising files in folders
+
+| Action | How |
+|---|---|
+| Create a folder | Click **New folder** in the toolbar |
+| Move a file or folder | Drag it to the destination folder in the navigation bar, or use Cut and Paste in the toolbar |
+| Copy | Select and click **Copy**, then navigate to the destination and click **Paste** |
+| Rename | Select a single item and click **Rename** |
+| Delete | Select one or more items and click **Delete** (permanent — there is no recycle bin in Explorer) |
+| Duplicate | Select items and click **Duplicate** — copies are saved in the same folder |
+
+<Warning>
+  Moving and deleting in Explorer are permanent operations. A confirmation dialog appears for drag-and-drop moves; confirm before proceeding.
+</Warning>
+
+### File toolbar — Tools tab
+
+| Button | Action |
+|---|---|
+| **Download** | Downloads the selected file to your computer |
+| **Preview** | Opens a preview of the file (image, text, folder info) in a dialog — navigable with arrow keys |
+| **Get info** | Shows detailed file or folder information (size, last modified) |
+| **Edit** | Opens the file editor for text files and file metadata |
+| **Archive** | Compresses selected items into a ZIP file |
+| **Extract** | Extracts a selected ZIP archive |
+
+### Right-click context menu
+
+Right-clicking on the workspace background, a folder, or a file shows a context menu with the most relevant actions for the selected item. Download is only available for files, not folders.
+
+### Searching for files
+
+The search box in the top-right of the toolbar searches by file name and extension.
+
+- **Here** (default) — searches only the currently open folder.
+- **In subfolders** — searches the current folder and all nested subfolders.
+
+---
+
+## The image editor
+
+The image editor lets you modify images directly in the browser without external software.
+
+### Opening the image editor
+
+- **From the page editor**: click an image in the editor, then click the **pencil** icon in the image toolbar.
+- **From Explorer**: right-click an image file and select **Edit**.
+
+### Available tools
+
+<CardGroup cols={2}>
+  <Card title="Resize" icon="expand">
+    Change the image dimensions. Predefined size templates are available (e.g. 80×80, 640×480) if configured by your administrator. Enable **Bound dimensions** to preserve the aspect ratio.
+  </Card>
+  <Card title="Crop" icon="crop">
+    Crop to any rectangle or to predefined aspect ratios: square, 3:2, 4:3, 5:4, 7:5, 16:9.
+  </Card>
+  <Card title="Flip" icon="flip-horizontal">
+    Flip the image horizontally (mirror) or vertically.
+  </Card>
+  <Card title="Rotate" icon="rotate-cw">
+    Rotate by any degree using the slider, or use the 30° clockwise/counterclockwise buttons.
+  </Card>
+  <Card title="Draw" icon="pencil">
+    Draw free or straight lines on the image. Choose colour and line thickness.
+  </Card>
+  <Card title="Shape" icon="shapes">
+    Add circles, rectangles, or triangles. Set stroke colour, fill colour, and stroke thickness. Shapes can be moved, scaled, and rotated after placement.
+  </Card>
+  <Card title="Icon" icon="icons">
+    Add icons or stickers from a predefined library or custom uploads. Adjust colour and position.
+  </Card>
+  <Card title="Text" icon="text">
+    Add text to the image. Supports bold, italic, and underline formatting; choose colour and size.
+  </Card>
+  <Card title="Mask" icon="image">
+    Apply masks to hide or highlight parts of the image.
+  </Card>
+  <Card title="Filter" icon="sliders">
+    Apply filters: black and white, sepia, blur, emboss, negative, focus. Adjust brightness, contrast, grain, and colour tint.
+  </Card>
+</CardGroup>
+
+---
+
+## File versioning and history
+
+When file versioning is enabled by your administrator, Explorer keeps a history of every file that is uploaded or overwritten.
+
+### Viewing file history
+
+Right-click a file in Explorer and choose **File settings** to see its history. From here you can:
+
+- **View** a historical version
+- **Compare** versions
+- **Roll back** — restore a previous version as the current file
+
+Historical files are stored in a dedicated folder on the server (`/WEB-INF/libfilehistory` by default).
+
+---
+
+## Document Manager
+
+The Document Manager is a more structured system for publishing versioned documents (PDFs, Word files, etc.) with scheduled release dates, categories, and downloadable links that always point to the current version.
+
+### Uploading a document
+
+<Steps>
+  <Step title="Open Document Manager">
+    Go to **Files → Document Manager** in the administration.
+  </Step>
+  <Step title="Click Add">
+    Click the **Add** button to open the document editor.
+  </Step>
+  <Step title="Fill in the Basic tab">
+    Enter a **Name** (the display label for the download link), set the **Validity from** and **Validity until** dates if needed, choose a **Destination directory**, and upload the file.
+  </Step>
+  <Step title="Optional: schedule for future upload">
+    Tick **Upload document later** and set the date and time. The document is added to the manager but not activated until that moment. You can also enter notification email addresses to be informed when the upload occurs.
+  </Step>
+  <Step title="Save">
+    Click **Save**. The document appears in the list with a star icon (current version).
+  </Step>
+</Steps>
+
+### Document statuses
+
+| Icon | Meaning |
+|---|---|
+| Star | Current (main) version |
+| Star-off | Historical version (replaced by a newer upload) |
+| Pin | Document is publicly visible |
+| Pin-off | Document is hidden from the public |
+| Red calendar | Scheduled for future upload |
+| Calendar-plus | Has a new version waiting to be uploaded in the future |
+
+### Uploading a new version
+
+Open the main document record and choose **Upload new version** in the Basic tab. The current version moves to the **Versions** tab as a historical entry, and the new file becomes the main document. Download links on your pages continue to work — they always point to the main version.
+
+<Note>
+  You can only upload a file of the same type (extension) as the document you are replacing.
+</Note>
+
+### Scheduling a new version for the future
+
+Select **Upload document later** when uploading a new version to queue it for a specific date and time. The current main document remains live until then. Pending versions appear in the **Pending** tab of the document editor and can be deleted if the release is cancelled.
+
+### Rolling back to a previous version
+
+Select the main document, click the **Rollback** button, and confirm. The most recent historical version replaces the current main document. Repeat to continue rolling back through older versions.
+
+Rollback requirements:
+- The document must be the main (current) version.
+- It must have at least one historical version.
+- It must not have a pending future version scheduled.
+
+---
+
+## Inserting files and images into pages
+
+### From the page editor — images
+
+Click the **Insert image** icon in the editor toolbar, then browse to the image in the file directory. Only image and video files are shown. Click a file to copy its path to the URL field, add alternative text, and click **OK**.
+
+### From the page editor — file links
+
+<Steps>
+  <Step title="Select the link text">
+    Highlight the text that should link to the file.
+  </Step>
+  <Step title="Open the link dialog">
+    Click the link icon or press `Ctrl+K`.
+  </Step>
+  <Step title="Choose the file location">
+    - **Media of this page → Files** — for files used only on this page. You can also drag and drop a file here to upload it on the spot.
+    - **Media of all sites → Files** — for shared files used across multiple pages.
+  </Step>
+  <Step title="Click the file and confirm">
+    Click the file to copy its path, then click **OK** to insert the link.
+  </Step>
+</Steps>
+
+<Info>
+  According to web accessibility guidelines, downloadable text documents should be published as PDF. Word (DOC) and Excel (XLS) formats are not recommended.
+</Info>
+
+### Creating subfolders for uploads
+
+If you have permission, you can create a new subfolder directly within the link/image dialog by clicking the **New folder** icon. This helps keep file uploads organised by page or topic.

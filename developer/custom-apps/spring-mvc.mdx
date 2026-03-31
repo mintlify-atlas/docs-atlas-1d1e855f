@@ -1,0 +1,479 @@
+---
+title: "Building a Spring MVC application"
+description: "Build a public-facing Spring MVC component for WebJET CMS using controllers, Thymeleaf templates, Spring Data repositories, and form handling."
+---
+
+A Spring MVC application in WebJET CMS is a Java class that extends `WebjetComponentAbstract`. It handles HTTP requests routed to it via `!INCLUDE()!` tags in page content, renders Thymeleaf templates, and can persist data using Spring Data JPA.
+
+This guide uses the `ContactApp` example from the [basecms](https://github.com/webjetcms/basecms) reference project.
+
+## Creating the controller class
+
+The application class must extend `WebjetComponentAbstract` and carry the `@WebjetComponent` annotation. Use the fully-qualified class name as the annotation value — it must be globally unique.
+
+```java
+package sk.iway.basecms.contact;
+
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
+
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.ui.Model;
+import org.springframework.validation.BindingResult;
+import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.web.bind.annotation.RequestParam;
+
+import lombok.Getter;
+import lombok.Setter;
+import sk.iway.iwcm.PathFilter;
+import sk.iway.iwcm.components.WebjetComponentAbstract;
+import sk.iway.iwcm.system.annotations.DefaultHandler;
+import sk.iway.iwcm.system.annotations.WebjetComponent;
+
+@WebjetComponent("sk.iway.basecms.contact.ContactApp")
+@Getter
+@Setter
+public class ContactApp extends WebjetComponentAbstract {
+
+    @JsonIgnore
+    private ContactRepository contactRepository;
+
+    // Parameters passed via !INCLUDE()! are mapped to fields automatically
+    private String country;
+
+    @Autowired
+    public ContactApp(ContactRepository contactRepository) {
+        this.contactRepository = contactRepository;
+    }
+
+    @Override
+    public void init(HttpServletRequest request, HttpServletResponse response) {
+        Logger.debug(ContactApp.class, "Init call, User-Agent=" + request.getHeader("User-Agent"));
+    }
+
+    @DefaultHandler
+    public String view(Model model, HttpServletRequest request) {
+        model.addAttribute("contacts", contactRepository.findAllByCountry(country, null));
+        return "/apps/contact/mvc/list";
+    }
+
+    public String edit(@RequestParam("id") long id, Model model, HttpServletRequest request) {
+        ContactEntity contact = contactRepository.getById(id);
+        model.addAttribute("entity", contact);
+        model.addAttribute("countries", ContactRestController.getCountries());
+        return "/apps/contact/mvc/edit";
+    }
+
+    public String add(Model model) {
+        ContactEntity contact = new ContactEntity();
+        contact.setCountry("sk");
+        model.addAttribute("entity", contact);
+        return "/apps/contact/mvc/edit";
+    }
+
+    public String saveForm(@Valid @ModelAttribute("entity") ContactEntity entity,
+                           BindingResult result, Model model, HttpServletRequest request) {
+        if (!result.hasErrors()) {
+            contactRepository.save(entity);
+            return "redirect:" + PathFilter.getOrigPath(request);
+        }
+        model.addAttribute("error", result);
+        model.addAttribute("entity", entity);
+        return "/apps/contact/mvc/edit";
+    }
+}
+```
+
+## URL mapping and routing
+
+Methods are invoked by matching their name against URL parameters:
+
+| URL                     | Method called   |
+|-------------------------|-----------------|
+| `/page/`                | `view()` (annotated `@DefaultHandler`) |
+| `/page/?edit=true&id=5` | `edit()`        |
+| `/page/?add=true`       | `add()`         |
+| `/page/?saveForm`       | `saveForm()`    |
+
+The `@DefaultHandler` annotation marks the fallback method. Its name can be anything — the annotation is what designates it as the default.
+
+You can also force a specific handler using the page parameter `defaultHandler`:
+
+```html
+!INCLUDE(sk.iway.basecms.contact.ContactApp, country="sk", defaultHandler=save)!
+```
+
+## Embedding the application in a page
+
+Use the `!INCLUDE()!` tag to embed the app anywhere in page content:
+
+```html
+!INCLUDE(sk.iway.basecms.contact.ContactApp, country="sk")!
+```
+
+The annotation name must match the `@WebjetComponent` value exactly. Parameters following the class name are injected into the class's fields automatically.
+
+### Supported parameter types
+
+```java
+String, BigDecimal, Boolean, Integer, Double, Float, boolean, int, double, float
+```
+
+## Thymeleaf templates
+
+WebJET CMS recommends Thymeleaf (`.html`) for new applications. When a method returns a path without a file extension (e.g. `return "/apps/contact/mvc/list"`), WebJET searches for matching files with `.html`, `.ftl`, or `.jsp` extensions in that order.
+
+The objects `request` and `session` are automatically available in the Thymeleaf model.
+
+### List template
+
+`src/main/webapp/apps/contact/mvc/list.html`:
+
+```html
+<h3 data-th-text="#{components.contact.page.list}">Contact list</h3>
+
+<p><a class="btn btn-primary" data-th-href="${'?add=true'}" data-th-text="#{components.contact.value.name}">Create</a></p>
+
+<div class="table-responsive">
+    <table class="table table-striped table-hover">
+        <tr>
+            <th data-th-text="#{components.contact.property.name}">Company</th>
+            <th data-th-text="#{components.contact.property.vatid}">VAT ID</th>
+            <th data-th-text="#{components.contact.property.city}">City</th>
+            <th></th>
+        </tr>
+        <tr data-th-each="contact : ${contacts}">
+            <td data-th-text="${contact.name}">InterWay</td>
+            <td data-th-text="${contact.vatid}">SK123456789</td>
+            <td data-th-text="${contact.city}">Bratislava</td>
+            <td>
+                <a class="btn btn-secondary"
+                   data-th-href="${'?edit=true&id='+contact.id}"
+                   data-th-text="#{components.checkform.confirm_table.button.edit}">Edit</a>
+            </td>
+        </tr>
+    </table>
+</div>
+```
+
+### Edit/add template
+
+`src/main/webapp/apps/contact/mvc/edit.html`:
+
+```html
+<h3 data-th-text="#{components.contact.dialog_title}">Contact</h3>
+
+<form data-th-action="${request.getAttribute('ninja').page.urlPath}"
+      data-th-object="${entity}" method="post">
+
+    <div data-th-if="${error != null}" class="alert alert-danger">
+        <p data-th-text="#{chat.form_fill_error}"></p>
+        <ul style="margin: 0;">
+            <li data-th-each="err : ${error.allErrors}">
+                <span data-th-text="#{components.contact.property.__${err.field}__}">field name</span>
+                - <span data-th-text="${err.defaultMessage}">error message</span>
+            </li>
+        </ul>
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label" data-th-text="#{components.contact.property.name}">Company</label>
+        <input type="text" class="form-control" data-th-field="*{name}">
+    </div>
+    <div class="mb-3">
+        <label class="form-label" data-th-text="#{components.contact.property.country}"></label>
+        <select class="form-control" data-th-field="*{country}">
+            <option data-th-each="country : ${countries}"
+                    data-th-value="${country.value}"
+                    data-th-text="${country.label}"></option>
+        </select>
+    </div>
+
+    <button type="submit" class="btn btn-primary"
+            data-th-text="#{button.submit}" name="saveForm">Submit</button>
+    <input type="hidden" name="id" data-th-field="*{id}"/>
+</form>
+```
+
+<Note>
+The submit button carries `name="saveForm"`. This URL parameter triggers the `saveForm()` method on the backend.
+</Note>
+
+## Handling form submissions and validation
+
+Use `@Valid` and `@ModelAttribute` to bind and validate the submitted form data. Spring populates a `BindingResult` with any constraint violations:
+
+```java
+public String saveForm(@Valid @ModelAttribute("entity") ContactEntity entity,
+                       BindingResult result, Model model, HttpServletRequest request) {
+    if (!result.hasErrors()) {
+        contactRepository.save(entity);
+        return "redirect:" + PathFilter.getOrigPath(request);
+    }
+    model.addAttribute("error", result);
+    model.addAttribute("entity", entity);
+    return "/apps/contact/mvc/edit";
+}
+```
+
+Validation constraints are defined on the entity using standard `jakarta.validation` annotations:
+
+```java
+@NotBlank
+private String name;
+
+@Size(min = 5, max = 8)
+private String zip;
+
+@Email
+private String contact;
+```
+
+## Using Spring Data repositories
+
+The repository interface extends `JpaRepository` and `JpaSpecificationExecutor`. The latter enables dynamic WHERE clause generation used by the admin data table for filtering and searching:
+
+```java
+package sk.iway.basecms.contact;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+
+public interface ContactRepository
+        extends JpaRepository<ContactEntity, Long>,
+                JpaSpecificationExecutor<ContactEntity> {
+
+    Page<ContactEntity> findAllByCountry(String country, Pageable pageable);
+}
+```
+
+<Warning>
+Do not use primitive types (`int`, `long`) in JPA entities — use wrapper types (`Integer`, `Long`) instead. Primitive types with default values interfere with filtering in data tables.
+</Warning>
+
+Annotate the repository field with `@JsonIgnore` in the component class. Without it, Jackson will try to serialize the repository into the JSON object used for the App Store editor, causing an error:
+
+```java
+@JsonIgnore
+private ContactRepository contactRepository;
+```
+
+## Configuration variables for apps
+
+You can expose configuration variables for a prefix using `AbstractConfigurationController`. This is useful for building a dedicated settings page for your application:
+
+```java
+@RestController
+@Datatable
+@RequestMapping("/admin/rest/myapp")
+@PreAuthorize("@WebjetSecurityService.hasPermission('cmp_myapp')")
+public class MyAppRestController extends AbstractConfigurationController {
+
+    @Autowired
+    public MyAppRestController(ConfDetailsMapper confDetailsMapper) {
+        super("MyApp", confDetailsMapper);
+    }
+}
+```
+
+The corresponding admin page initializes a data table targeting the `ConfPrefixDto` entity:
+
+```html
+<script data-th-inline="javascript">
+    let url = "/admin/rest/myapp";
+    let columns = /*[(${layout.getDataTableColumns("sk.iway.iwcm.components.configuration.model.ConfPrefixDto")})]*/ '';
+</script>
+
+<script type="text/javascript">
+    window.domReady.add(function () {
+        let dt = WJ.DataTable({ url: url, serverSide: false, columns: columns, id: "myappConfTable" });
+        dt.hideButton("create");
+        dt.hideButton("remove");
+        dt.hideButton("duplicate");
+    });
+</script>
+
+<table id="myappConfTable" class="datatableInit table"></table>
+```
+
+## Adding the app to the administration menu
+
+Create `modinfo.properties` inside `/apps/{appName}/` (e.g. `src/main/webapp/apps/contact/modinfo.properties`):
+
+```properties
+# Translation key for the menu item label
+leftMenuNameKey=components.contact.title
+# Permission key — must match @PreAuthorize in the REST controller
+itemKey=cmp_contact
+# If true, the permission can be assigned to users
+userItem=true
+# URL of the admin page
+leftMenuLink=/apps/contact/admin/
+# Icon name from Font Awesome v5
+icon=address-book
+# If true, the app is disabled for all users after installation
+defaultDisabled=true
+# If true, this is a customer app (shown at top of app list)
+custom=true
+
+# Optional submenu entries
+#leftSubmenu1NameKey=components.contact.subpage.title
+#leftSubmenu1Link=/apps/contact/admin/subpage/
+```
+
+The admin page at `/apps/contact/admin/index.html` initializes a `WJ.DataTable` against the REST endpoint:
+
+```html
+<script>
+    var dataTable;
+
+    window.domReady.add(function () {
+        WJ.breadcrumb({
+            id: "contact",
+            tabs: [{ url: '/apps/contact/admin/', title: '[[#{components.contact.title}]]', active: true }]
+        });
+
+        let url = "/admin/rest/apps/contact";
+        let columns = [(${layout.getDataTableColumns("sk.iway.basecms.contact.ContactEntity")})];
+
+        dataTable = WJ.DataTable({
+            url: url,
+            serverSide: true,
+            columns: columns,
+            id: "dataTable",
+            fetchOnEdit: true,
+            fetchOnCreate: true
+        });
+    });
+</script>
+
+<table id="dataTable" class="datatableInit table"></table>
+```
+
+<Tip>
+Use `window.domReady.add` instead of `$(document).ready`. It waits for translation keys to load before executing.
+</Tip>
+
+## Conditional display on specific devices
+
+The `device` parameter in `!INCLUDE()!` restricts the application to certain device types. Detection is server-side, based on the `User-Agent` header.
+
+| Value          | Displayed on                    |
+|----------------|---------------------------------|
+| `phone`        | Phones (iPhone, mobile+Android) |
+| `tablet`       | iPads, tablets, Kindles         |
+| `pc`           | Desktop browsers                |
+| `phone+tablet` | Phones and tablets              |
+| _(empty)_      | All devices                     |
+
+Test device detection without a real device using the URL parameter `?forceBrowserDetector=phone` (or `tablet`, `pc`).
+
+When previewing in the editor, a note shows the configured device restriction instead of rendering the app.
+
+## File uploads with MultipartFile
+
+For administration pages with file upload, extend `AbstractUploadListener<T>`. It processes the multipart request in its constructor and provides `getForm()` and `getBindingResult()`.
+
+### Form bean
+
+```java
+package sk.iway.basecms.contact.upload;
+
+import lombok.Getter;
+import lombok.Setter;
+import org.springframework.stereotype.Component;
+import org.springframework.web.multipart.MultipartFile;
+
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
+
+@Component
+@Getter
+@Setter
+public class Form {
+    @NotNull(message = "form.document.not_null")
+    private MultipartFile document;
+
+    @NotBlank(message = "form.p1.not_blank")
+    private String p1;
+
+    @Size(min = 10, max = 20, message = "form.p2.size")
+    private String p2;
+}
+```
+
+### Event listener
+
+```java
+package sk.iway.basecms.contact.upload;
+
+import jakarta.validation.Validator;
+import org.springframework.context.event.EventListener;
+import org.springframework.stereotype.Component;
+import org.springframework.ui.ModelMap;
+import org.springframework.validation.BindingResult;
+import sk.iway.iwcm.admin.AbstractUploadListener;
+import sk.iway.iwcm.admin.ThymeleafEvent;
+import sk.iway.iwcm.system.spring.events.WebjetEvent;
+
+@Component
+public class UploadExampleListener extends AbstractUploadListener<Form> {
+
+    protected UploadExampleListener(Validator validator) {
+        super(validator);
+    }
+
+    @Override
+    @EventListener(condition = "#event.clazz eq 'sk.iway.iwcm.admin.ThymeleafEvent' "
+                             + "&& event.source.page=='contact' "
+                             + "&& event.source.subpage=='upload'")
+    public void processForm(final WebjetEvent<ThymeleafEvent> event) {
+        super.processForm(event);
+        ModelMap model = event.getSource().getModel();
+        Form form = getForm();
+        model.addAttribute("form", form);
+
+        if (!isPost()) return;
+
+        BindingResult errors = getBindingResult();
+        if (errors.hasErrors()) return;
+
+        // process the uploaded file
+        model.addAttribute("importedFileName", form.getDocument().getOriginalFilename());
+    }
+}
+```
+
+### Frontend form
+
+The HTML form must use `enctype="multipart/form-data"`:
+
+```html
+<form method="post"
+      data-th-action="@{/apps/contact/admin/upload/}"
+      data-th-object="${form}"
+      enctype="multipart/form-data">
+
+    <div data-th-if="${#fields.hasErrors('*')}" class="alert alert-danger">
+        <ul style="margin-bottom: 0;">
+            <li data-th-each="error : ${#fields.errors('*')}" data-th-text="${error}">error</li>
+        </ul>
+    </div>
+
+    <div class="form-group mb-3">
+        <label for="document" class="form-label">Document</label>
+        <input type="file" data-th-field="*{document}" id="document" class="form-control">
+    </div>
+
+    <button type="submit" class="btn btn-primary">[[#{button.submit}]]</button>
+</form>
+```
+
+<Note>
+File upload configuration is handled by `V9SpringConfig.multipartResolver()` and the multipart POST is processed by `ThymeleafAdminController.appHandlerPost()`.
+</Note>

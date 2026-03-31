@@ -1,0 +1,123 @@
+---
+title: 'Gallery'
+description: 'Create and manage photo galleries in WebJET CMS — upload images, configure display sizes, and embed galleries on pages.'
+keywords: ['gallery', 'photo gallery', 'images', 'upload photos', 'thumbnail', 'watermark', 'image editor']
+---
+
+The Gallery application lets you create photo galleries by uploading images directly from your camera or computer. WebJET automatically generates three versions of each uploaded photo:
+
+- **Thumbnail** — approximately 160×120 pixels, used in the image list view.
+- **Normal resolution** — approximately 600×400 pixels, displayed when a visitor clicks a thumbnail.
+- **Original** — the unmodified upload, kept as a source for re-generating the other sizes.
+
+The dimensions of thumbnails and normal-resolution images are set per folder and can be changed at any time — images are regenerated automatically from the original.
+
+## Gallery administration
+
+The gallery administration is split into two columns: the folder tree on the left and the photos in the selected folder on the right.
+
+### Creating a gallery folder
+
+<Steps>
+  <Step title="Open the Gallery application">
+    Navigate to the Gallery section in the administration.
+  </Step>
+  <Step title="Add a folder">
+    Click the Add icon in the folders column to create a new gallery folder.
+  </Step>
+  <Step title="Configure the folder">
+    Fill in the folder settings:
+
+    - **Gallery name** — the display name of the gallery. After creation, renaming only changes the display name; the files remain in the original directory.
+    - **Method of resizing** — controls how uploaded images are scaled:
+
+      | Method | Description |
+      |---|---|
+      | Customized display | Image is scaled so no dimension exceeds the set maximum |
+      | Crop to fit | Image is cropped to exactly fill the specified dimensions |
+      | Exact size | Image is resized to exactly the specified dimensions (may distort aspect ratio) |
+      | Exact width | Width is set exactly; height is calculated to preserve aspect ratio |
+      | Exact height | Height is set exactly; width is calculated to preserve aspect ratio |
+      | Do not generate thumbnails | Only the original image is kept; thumbnails can be generated on demand using the `/thumb` prefix |
+
+    - **Watermark** — in the Watermark tab, configure a logo or brand image to be applied as a watermark to generated images.
+  </Step>
+</Steps>
+
+### Uploading photos
+
+<Steps>
+  <Step title="Select the target folder">
+    Click the gallery folder in the tree where you want to upload images.
+  </Step>
+  <Step title="Upload images">
+    Click the Add icon in the Images column, or drag and drop files directly from your computer. Hold Ctrl to select multiple files at once.
+  </Step>
+</Steps>
+
+### Viewing and editing photos
+
+The toolbar above the photo list shows size buttons (`S`, `M`, `L`) to adjust how large the thumbnails appear in the administration. The last button switches to a table view where you can use the Edit Cell function.
+
+Click a photo to select it, then use the toolbar icons to edit, delete, view, or rotate it. Click directly on the file name to open the editor quickly.
+
+The photo editor has the following tabs:
+
+<AccordionGroup>
+  <Accordion title="Description">
+    Enter a short and long description of the photo in multiple languages. The short description appears in the image list; the long description is shown when the full-size image is displayed. Descriptions are shown automatically in the visitor's selected language.
+  </Accordion>
+  <Accordion title="Metadata">
+    Additional information about the photo:
+    - **File name** — unique identifier within the system.
+    - **Folder** — the storage path. Changing this value moves the image to a different folder.
+    - **Author** — name of the photographer.
+    - **Date uploaded** — when the photo was added to the system.
+    - **Priority** — controls the display order. A lower value places the photo earlier in the list.
+    - **URL of the image source** — the original source URL if the image was obtained from elsewhere.
+  </Accordion>
+  <Accordion title="Image editor">
+    A built-in editor where you can rotate, crop, resize, add text, and apply effects to the photo.
+  </Accordion>
+  <Accordion title="Area of interest">
+    Marks the region of the photo that should remain visible when the image is cropped for use in thumbnails or news listings. This does not physically crop the photo — it only records the preferred focus area.
+  </Accordion>
+</AccordionGroup>
+
+## Moving images between folders
+
+To move an image to a different gallery folder, edit the image and change the **Folder** field in the **Metadata** tab. You can browse for the destination folder using the selection window, or type the path directly.
+
+<Note>
+The path must always start with `/images/gallery`. If the destination folder does not exist, it is created automatically. The new folder inherits its settings from the nearest parent folder.
+</Note>
+
+The Gallery application does not support drag-and-drop reordering between folders. Use the Folder field in the image metadata to move images.
+
+## Embedding the gallery on a page
+
+<Steps>
+  <Step title="Open the page in the editor">
+    Navigate to the page where you want to display the gallery.
+  </Step>
+  <Step title="Insert the Gallery application">
+    Add the Gallery application and open its settings dialog.
+  </Step>
+  <Step title="Configure the Application Parameters tab">
+    Set the directory where the gallery images are stored, whether to include subdirectories, and how many images to display per page.
+  </Step>
+  <Step title="Choose a display style">
+    Select the visual style for the gallery:
+    - **Photo Swipe** — responsive gallery with swipe support for mobile devices.
+    - **PrettyPhoto** — an older viewer with left/right arrow navigation.
+  </Step>
+  <Step title="Manage photos from the dialog">
+    Use the **Photos** tab within the app dialog to upload additional photos or create a new subfolder without leaving the page editor.
+  </Step>
+</Steps>
+
+For each photo, you can set a **title** (shown in the image list) and a **perex** (long description shown when the full-size image is displayed after clicking).
+
+## Reordering images
+
+Images are ordered by the **Priority** value set in each photo's Metadata tab. A lower priority number means the photo appears earlier in the gallery. Edit individual photos and adjust the Priority field to change the order.

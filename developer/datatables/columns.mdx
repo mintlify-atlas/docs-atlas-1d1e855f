@@ -1,0 +1,517 @@
+---
+title: 'Column definitions'
+description: 'Define DataTables columns through Java annotations on JPA entities. The framework generates the JavaScript column configuration automatically from @DataTableColumn and related annotations.'
+---
+
+The `columns` JSON array required by `WJ.DataTable` can be generated directly from Java entity annotations. In a Thymeleaf/Pug template, call:
+
+```javascript
+let columns = [(${layout.getDataTableColumns('sk.iway.iwcm.components.gallery.GalleryEntity')})];
+```
+
+Every field annotated with `@DataTableColumn` is included. The annotation mirrors the [datatables.net columns API](https://datatables.net/reference/option/columns) and adds WebJET-specific properties.
+
+---
+
+## `@DataTableColumn` annotation
+
+### Required attributes
+
+<ParamField path="inputType" type="DataTableColumnType">
+  Shorthand that sets the field type and several defaults at once. Accepts a single value or a combined set, e.g. `inputType = { DataTableColumnType.OPEN_EDITOR, DataTableColumnType.JSON }`.
+</ParamField>
+
+<ParamField path="title" type="string">
+  Column heading. Use a translation key such as `"components.gallery.fileName"`. If omitted, the key is auto-generated as `components.<bean-name>.<field-name>`. An empty or non-breaking-space title automatically sets `hidden = true`.
+</ParamField>
+
+### Visibility
+
+<ParamField path="hidden" type="boolean" default="false">
+  Completely hides the column from the table. The user cannot make it visible. The field is still available to the editor.
+</ParamField>
+
+<ParamField path="visible" type="boolean" default="true">
+  Hides the column by default but lets the user re-enable it through the column visibility control.
+</ParamField>
+
+<ParamField path="hiddenEditor" type="boolean" default="false">
+  Excludes the field from the editor dialog while keeping it visible in the table.
+</ParamField>
+
+<ParamField path="filter" type="boolean" default="true">
+  Set to `false` to suppress the column's search filter in the table header.
+</ParamField>
+
+### Display
+
+<ParamField path="renderFormat" type="string">
+  Column render format. See the full list in [the overview](/developer/datatables/overview#column-renderformat-values).
+</ParamField>
+
+<ParamField path="renderFormatLinkTemplate" type="string">
+  URL pattern for `dt-format-link` and `dt-format-text`, e.g. `"javascript:;"` or `"/temps-list.html"`.
+</ParamField>
+
+<ParamField path="renderFormatPrefix" type="string">
+  HTML prepended to the rendered value, e.g. `'<i class="ti ti-pencil"></i> '`.
+</ParamField>
+
+<ParamField path="renderFunction" type="string">
+  Name of a global JavaScript function used for rendering. The function receives `(data, type, row, meta)` and must return the HTML string. Define it as `window.myRenderFn = function(...) {...}`.
+</ParamField>
+
+<ParamField path="className" type="string">
+  CSS class(es) added to the `<td>` element. Prefix with `!` to replace the class set by `inputType`. Special values:
+  - `disabled` — grey appearance suggesting non-editable.
+  - `not-export` — excludes the column from exports.
+  - `allow-html` — renders raw HTML instead of escaping it.
+  - `hide-on-create` / `hide-on-edit` / `hide-on-duplicate` — conditional visibility in the editor.
+  - `wrap` — enables text wrapping (auto-set for `TEXTAREA`).
+</ParamField>
+
+<ParamField path="orderable" type="boolean" default="true">
+  Set to `false` to disable column sorting.
+</ParamField>
+
+<ParamField path="orderProperty" type="string">
+  Override the DB column(s) used for sorting. Supports comma-separated multi-column sort, e.g. `"contactLastName,deliverySurName"`.
+</ParamField>
+
+### Editor
+
+<ParamField path="tab" type="string">
+  Shortcut for `editor.tab`. Places the field in the named editor tab.
+</ParamField>
+
+<ParamField path="editor" type="DataTableColumnEditor[]">
+  Editor-specific configuration. See [`@DataTableColumnEditor`](#datatablecolumneditor-annotation) below.
+</ParamField>
+
+<ParamField path="defaultValue" type="string">
+  Default value for new records when `fetchOnCreate` is `false`. Supports macros: `{currentDomain}`, `{currentDate}`, `{currentDateTimeSeconds}`, `{currentTime}`.
+</ParamField>
+
+### Ordering
+
+<ParamField path="sortAfter" type="string">
+  Data attribute of the field after which this field is inserted. Use `"FIRST"` to move the field to the top. Useful when combined with `@DataTableColumnNested`.
+</ParamField>
+
+### Permissions
+
+<ParamField path="perms" type="string">
+  Permission name required to display this column. The column is hidden if the user does not hold the right:
+
+  ```javascript
+  {
+      data: "domainName",
+      perms: "multiDomain"
+  }
+  ```
+</ParamField>
+
+---
+
+## `@DataTableColumnEditor` annotation
+
+<ParamField path="type" type="string">
+  HTML input type: `"text"`, `"textarea"`, `"checkbox"`, `"datetime"`, etc.
+</ParamField>
+
+<ParamField path="label" type="string">
+  Translation key for the field label in the editor, if different from the column `title`.
+</ParamField>
+
+<ParamField path="message" type="string">
+  Translation key for the field tooltip. Auto-searched as `<title>.tooltip` if not set. Supports basic Markdown.
+</ParamField>
+
+<ParamField path="tab" type="string">
+  The tab ID in which this field appears.
+</ParamField>
+
+<ParamField path="attr" type="DataTableColumnEditorAttr[]">
+  HTML attributes set on the input element. Common keys:
+
+  | Key | Value | Effect |
+  |---|---|---|
+  | `data-dt-field-hr` | `"before"` or `"after"` | Horizontal rule divider |
+  | `data-dt-field-headline` | Translation key | Section heading before the field |
+  | `data-dt-field-full-headline` | Translation key | Full-width heading (e.g. before nested datatable) |
+  | `disabled` | `"disabled"` | Makes the field read-only |
+</ParamField>
+
+<ParamField path="options" type="DataTableColumnEditorAttr[]">
+  Options for `SELECT` and `CHECKBOX` fields. The `key` is the display label and `value` is the stored value.
+</ParamField>
+
+<ParamField path="multiple" type="boolean">
+  Sets the `multiple` attribute for `MULTISELECT` fields.
+</ParamField>
+
+<ParamField path="separator" type="string">
+  Separator character for `MULTISELECT` values stored as a string. Omit to store/receive as an array.
+</ParamField>
+
+---
+
+## `DataTableColumnType` values
+
+### Standard types
+
+<AccordionGroup>
+  <Accordion title="Core types">
+    | Value | Description |
+    |---|---|
+    | `ID` | Primary key column |
+    | `OPEN_EDITOR` | Creates a link on the column to open the editor |
+    | `TEXT` | Single-line text input |
+    | `TEXTAREA` | Multi-line text input |
+    | `SELECT` | Dropdown select |
+    | `MULTISELECT` | Multi-choice select |
+    | `BOOLEAN` | Checkbox with `true`/`false` values |
+    | `CHECKBOX` | Checkbox with configurable selected/unselected values |
+    | `DISABLED` | Displayed but not editable |
+    | `ROW_REORDER` | Drag-and-drop row ordering handle |
+  </Accordion>
+  <Accordion title="Numeric types">
+    | Value | Description |
+    |---|---|
+    | `NUMBER` | Numeric field |
+    | `TEXT_NUMBER` | Rounded number; large values shown as `10k` etc. |
+    | `TEXT_NUMBER_INVISIBLE` | Numeric field hidden from both table and editor |
+  </Accordion>
+  <Accordion title="Date and time types">
+    | Value | Description |
+    |---|---|
+    | `DATE` | Date picker |
+    | `DATETIME` | Date and time picker |
+    | `TIME_HM` | Hours and minutes picker |
+    | `TIME_HMS` | Hours, minutes, and seconds picker |
+  </Accordion>
+  <Accordion title="Special types">
+    | Value | Description |
+    |---|---|
+    | `GALLERY_IMAGE` | Image display field with caption disabled |
+    | `QUILL` | Basic rich-text editor (bold, italic, etc.) |
+    | `WYSIWYG` | Full HTML editor |
+    | `JSON` | Directory selection field |
+    | `DATATABLE` | Nested datatable inside the editor |
+    | `ELFINDER` | File/page link picker |
+    | `UPLOAD` | File upload field |
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Annotated examples
+
+### Basic field types
+
+```java
+// TranslationKeyDto
+
+@DataTableColumn(inputType = DataTableColumnType.ID)
+private Integer id;
+
+@DataTableColumn(inputType = DataTableColumnType.OPEN_EDITOR)
+private String key;
+
+@DataTableColumn(renderFormat = "dt-format-text-wrap", editor = {
+    @DataTableColumnEditor(type = "textarea")
+})
+private String value;
+
+@DataTableColumn(renderFormat = "dt-format-text-wrap", editor = {
+    @DataTableColumnEditor(
+        type = "text",
+        attr = { @DataTableColumnEditorAttr(key = "disabled", value = "disabled") }
+    )
+})
+private String oldValue;
+
+@DataTableColumn(renderFormat = "dt-format-date-time", editor = {
+    @DataTableColumnEditor(
+        type = "datetime",
+        attr = { @DataTableColumnEditorAttr(key = "disabled", value = "disabled") }
+    )
+})
+private Date updateDate;
+```
+
+### Gallery entity
+
+```java
+@Size(max = 255)
+@Column(name = "image_name")
+@DataTableColumn(
+    inputType = DataTableColumnType.OPEN_EDITOR,
+    tab = "metadata",
+    title = "[[#{components.gallery.fileName}]]"
+)
+private String imageName;
+
+@Size(max = 255)
+@Column(name = "image_path")
+@DataTableColumn(
+    inputType = DataTableColumnType.TEXT,
+    title = "admin.temp_group_list.directory",
+    tab = "metadata",
+    editor = {
+        @DataTableColumnEditor(attr = {
+            @DataTableColumnEditorAttr(key = "disabled",          value = "disabled"),
+            @DataTableColumnEditorAttr(key = "data-dt-field-hr",  value = "after")
+        })
+    }
+)
+private String imagePath;
+```
+
+### Checkbox with custom values
+
+```java
+@DataTableColumn(
+    inputType = DataTableColumnType.CHECKBOX,
+    title = "[[#{editor.access_restrictions_enable}]]",
+    tab = "access",
+    sortAfter = "editorFields.loggedSitemap",
+    editor = {
+        @DataTableColumnEditor(
+            attr = {
+                @DataTableColumnEditorAttr(key = "data-dt-field-hr",       value = "before"),
+                @DataTableColumnEditorAttr(key = "data-dt-field-headline", value = "editor.access_restrictions"),
+                @DataTableColumnEditorAttr(key = "unselectedValue",        value = "")
+            },
+            options = {
+                @DataTableColumnEditorAttr(key = "editor.menu_show", value = "true"),
+                @DataTableColumnEditorAttr(key = "editor.menu_hide", value = "false")
+            }
+        )
+    }
+)
+private Integer[] passwordProtected;
+```
+
+### Row reorder
+
+Activate drag-and-drop row ordering by annotating the sort priority field:
+
+```java
+@Column(name = "sort_priority")
+@DataTableColumn(
+    inputType = DataTableColumnType.ROW_REORDER,
+    title = "",
+    className = "icon-only",
+    filter = false
+)
+private Integer sortPriority;
+```
+
+When the user reorders rows, the framework calls `/row-reorder` on the server and updates all affected `sortPriority` values automatically.
+
+---
+
+## SELECT field options
+
+<Steps>
+  <Step title="Inline annotation options">
+    Set options directly in the annotation. Best for short, static lists:
+
+    ```java
+    @DataTableColumn(inputType = DataTableColumnType.SELECT, editor = {
+        @DataTableColumnEditor(
+            options = {
+                @DataTableColumnEditorAttr(key = "Slovak", value = "sk"),
+                @DataTableColumnEditorAttr(key = "Czech",  value = "cz")
+            }
+        )
+    })
+    private String language;
+    ```
+  </Step>
+  <Step title="Static method call">
+    Use a static factory method returning `List<?>`. Specify the label and value property names in `value`:
+
+    ```java
+    @DataTableColumnEditorAttr(
+        key   = "method:sk.iway.basecms.contact.ContactRestController.getCountries",
+        value = "label:value"
+    )
+    ```
+  </Step>
+  <Step title="optionMethods annotation">
+    Cleaner alternative to the `method:` prefix:
+
+    ```java
+    @DataTableColumn(inputType = DataTableColumnType.SELECT,
+                     title = "components.formsimple.fieldType", editor = {
+        @DataTableColumnEditor(
+            optionMethods = {
+                @DataTableOptionMethod(
+                    className     = "sk.iway.iwcm.components.formsimple.FormSimpleApp",
+                    methodName    = "getFieldTypes",
+                    labelProperty = "label",
+                    valueProperty = "value"
+                )
+            }
+        )
+    })
+    private String fieldType;
+    ```
+  </Step>
+  <Step title="Enumeration (dials application)">
+    Bind to the WebJET Dials application by name or ID:
+
+    ```java
+    @DataTableColumnEditorAttr(
+        key   = "enumeration:Okresne Mestá",
+        value = "string1:string2"
+    )
+    ```
+  </Step>
+  <Step title="REST service options">
+    For standard datatables this is the preferred approach. Use `DatatablePageImpl.addOptions(...)` in the REST controller to populate options server-side. See [REST controller — dials for select boxes](/developer/datatables/rest-controller#dials-for-select-boxes).
+  </Step>
+</Steps>
+
+---
+
+## Nested attributes (`@DataTableColumnNested`)
+
+Use nested attributes to attach computed or transient data to an entity without storing it in the database. A common pattern is `editorFields`:
+
+```java
+// DocDetails.java
+@DataTableColumnNested
+@Transient
+private DocEditorFields editorFields = null;
+```
+
+The framework scans `DocEditorFields` recursively for `@DataTableColumn` annotations and generates column entries prefixed with `editorFields.`:
+
+```json
+{
+  "data": "editorFields.allowChangeUrl",
+  "name": "editorFields.allowChangeUrl",
+  "title": "Allow URL change",
+  "renderFormat": "dt-format-boolean-true",
+  "editor": { "type": "checkbox", "tab": "basic" }
+}
+```
+
+<Tip>
+  Use a custom prefix with `@DataTableColumnNested(prefix = "myVar")`. Set `prefix = ""` to merge fields without any prefix.
+</Tip>
+
+<Warning>
+  If the entity is cached (e.g. `GroupDetails`), setting `editorFields` will persist in the cache and unnecessarily inflate memory and JSON serialisation. Clone the object before setting `editorFields` and return the clone.
+</Warning>
+
+### `BaseEditorFields` and `DocEditorFields`
+
+`BaseEditorFields` provides shared utility methods used across all `EditorFields` implementations:
+
+| Method | Purpose |
+|---|---|
+| `addRowClass(String)` | Adds a CSS class to the table row |
+| `addStatusIcon(String)` | Adds a FontAwesome/Tabler icon to the status column |
+| `getStatusIconsHtml()` | Returns the rendered icon HTML string |
+
+Implement `fromXxx(entity)` to populate fields before editing and `toXxx(entity)` to write them back before saving. Call these methods explicitly in `processFromEntity` and `processToEntity` in your REST controller.
+
+---
+
+## Custom render functions
+
+For complex cell rendering, annotate the field with `renderFunction` and define the function globally:
+
+```java
+// @Column(name = "step_name")
+// @DataTableColumn(
+//     inputType = DataTableColumnType.TEXT,
+//     title = "components.banner.primaryHeader",
+//     renderFunction = "renderStepName"
+// )
+// private String stepName;
+```
+
+```javascript
+window.renderStepName = function(data, type, row, meta) {
+    if (type === "display" || type === "filter") {
+        let displayName = `<span class="text-muted small">Step ${meta.row + 1}</span>`;
+        let secondRow = "";
+        if (row.stepName && row.stepName.trim() !== "") {
+            secondRow += row.stepName;
+        }
+        if (row.stepSubName && row.stepSubName.trim() !== "") {
+            secondRow += ` (${row.stepSubName})`;
+        }
+        return displayName + (secondRow ? `<br>${secondRow}` : "");
+    }
+    return data;
+};
+```
+
+---
+
+## JavaScript helpers for column manipulation
+
+The `WJ.DataTable.mergeColumns(columns, patch)` utility finds a column by `name` and extends it with `patch` using `jQuery.extend`:
+
+```javascript
+WJ.DataTable.mergeColumns(columns, {
+    name: "datatableImage",
+    render: function (data, type, row) {
+        return '<div class="img" style="background-image:url(/thumb'
+            + row.imagePath + '/' + row.imageName
+            + '?w=600&h=400&q=90);"></div>';
+    },
+    className: "dt-image",
+    renderFormat: "dt-format-none"
+});
+```
+
+Add a hidden field:
+
+```javascript
+columns.push({
+    data:    "availableGroups",
+    name:    "availableGroups",
+    title:   "[[#{admin.temp.edit.showForDir}]]",
+    visible: false,
+    editor:  { type: "text", tab: "accessTab" }
+});
+```
+
+Reorder columns:
+
+```javascript
+filteredColumns = WJ.DataTable.moveColumn(
+    filteredColumns,
+    "formSettings.recipients",
+    "formName"
+);
+```
+
+---
+
+## Validation
+
+Standard `jakarta.validation` annotations are supported on entity fields:
+
+```java
+@NotBlank              // rejects blank and whitespace
+@NotEmpty              // rejects blank, allows whitespace
+@Size(min = 10, max = 20, message = "form.p2.size")
+@Email
+@Pattern(regexp = "^.+@.+\\.", message = "components.module.property")
+@DecimalMax(value = "200")
+@DecimalMin(value = "100")
+@Future                // date must be in the future
+@Past                  // date must be in the past
+```
+
+Translation keys support attribute interpolation: `{min}`, `{max}`, `${validatedValue}`.
+
+For custom validation logic, implement `validateEditor` in your REST controller. See [REST controller — validation](/developer/datatables/rest-controller#validation).

@@ -1,0 +1,282 @@
+---
+title: "Monitoring and performance"
+description: "Monitor server health, database query performance, and application speed in WebJET CMS. Includes log file management, log levels, cache tuning, and restarting the application."
+keywords: ["monitoring", "performance", "server monitoring", "JPA", "log files", "log levels", "cache", "restart", "Nagios", "Zabbix"]
+---
+
+WebJET CMS includes a built-in **Server Monitoring** application (accessible under **Overview** in the administration) and a lightweight HTTP endpoint for external monitoring tools. This page covers what each monitoring feature does, how to configure it, and how to diagnose performance problems.
+
+<Warning>
+  Enabling performance and JPA monitoring increases server memory usage and reduces throughput. Do not enable these features permanently on production servers. Use them during targeted investigations and disable them afterwards.
+</Warning>
+
+## Server monitoring application
+
+The Server Monitoring application provides three categories of data.
+
+### Current values
+
+Always available — no configuration required. Shows current server load, memory usage, and the number of active database connections.
+
+### Recorded historical values
+
+Enable by setting `serverMonitoringEnable=true`. WebJET then records memory, sessions, cache, and database connections to the `monitoring` table every 30 seconds. You can view the historical trend in the **Recorded values** tab.
+
+### Application, web page, and SQL statistics
+
+<AccordionGroup>
+  <Accordion title="Application and web page statistics (serverMonitoringEnablePerformance)">
+    Set `serverMonitoringEnablePerformance=true` to enable two additional tabs:
+
+    - **Applications** — execution count, average time, cache hit count, and slowest execution per application component.
+    - **WEB pages** — view count, average view time, and fastest/slowest page load per URL.
+
+    A restart is required after changing this variable.
+  </Accordion>
+  <Accordion title="SQL query statistics (serverMonitoringEnableJPA)">
+    Set `serverMonitoringEnableJPA=true` to enable the **SQL queries** tab, which shows each JPA-managed query's execution count, average time, and fastest/slowest execution alongside the SQL text.
+
+    This option has a higher memory cost than `serverMonitoringEnablePerformance`. A restart is required after changing this variable.
+  </Accordion>
+</AccordionGroup>
+
+### Cluster node selection
+
+The **Applications**, **WEB pages**, and **SQL queries** tabs all share node-selection logic. A dropdown in the page header lets you switch between the current node (data read from local memory) and other cluster nodes (data read from the `cluster_monitoring` database table).
+
+For nodes other than the current one, data retrieval works as follows:
+
+<Steps>
+  <Step title="Delete stale data">
+    Clicking refresh removes old data from `cluster_monitoring` for the selected node.
+  </Step>
+  <Step title="Request fresh data">
+    WebJET writes a request record to `cluster_refresher`. The target node picks this up on its next cycle (interval set by `clusterRefreshTimeout`) and writes its current data to `cluster_monitoring`.
+  </Step>
+  <Step title="Poll for results">
+    The browser polls every 10 seconds until at least one record appears in `cluster_monitoring`. The animation hides and the data displays.
+  </Step>
+</Steps>
+
+<Note>
+  Retrieval can take up to the full `clusterRefreshTimeout` interval. This is expected behaviour.
+</Note>
+
+## Remote monitoring endpoint
+
+WebJET exposes a health-check endpoint at:
+
+```
+/components/server_monitoring/monitor.jsp
+```
+
+| HTTP status | Meaning |
+|-------------|---------|
+| `200 OK` | All checks passed; response body is `OK` |
+| `500 Internal Server Error` | One or more checks failed; response body contains the reason |
+
+The endpoint can be called as frequently as once per second and is suitable for cluster node availability checks in Nagios, Zabbix, or similar tools.
+
+**What the endpoint checks:**
+
+- WebJET initialisation status (responds `NOT INITIALISED` if not ready, `TOO SHORT AFTER START` during preheat)
+- Database availability — runs `SELECT title FROM documents WHERE doc_id=?` against the document ID set in `monitorTestDocId`
+- Template availability — at least 3 templates must be initialised
+- Statistics write queue — alerts with `STAT BUFFER SUSPICION` if the queue exceeds `statBufferSuspicionThreshold` (default 1000)
+
+**Maintenance mode:**
+
+Set `monitorMaintenanceMode=true` to manually switch WebJET to service mode. The endpoint will then return `UNAVAILABLE`, which you can use to safely remove a node from a load balancer rotation during maintenance.
+
+### Allowed IP addresses
+
+Only requests from IPs in `serverMonitoringEnableIPs` receive a valid response. The default list is:
+
+```
+127.0.0.1, 192.168., 10., 62.65.161., 85.248.107., 195.168.35.
+```
+
+Add your monitoring server's IP to this list if it is not already covered.
+
+## Configuration variables reference
+
+<AccordionGroup>
+  <Accordion title="Monitoring enable/disable">
+    | Variable | Default | Description |
+    |----------|---------|-------------|
+    | `serverMonitoringEnable` | `false` | Records server metrics to the `monitoring` table every 30 seconds |
+    | `serverMonitoringEnablePerformance` | `false` | Enables application and web page execution time statistics |
+    | `serverMonitoringEnableJPA` | `false` | Enables JPA SQL query execution time statistics (higher memory cost) |
+    | `appendQueryStringWhenMonitoringDocuments` | — | Captures SQL `?` parameters during document monitoring |
+  </Accordion>
+  <Accordion title="Endpoint and cluster settings">
+    | Variable | Default | Description |
+    |----------|---------|-------------|
+    | `serverMonitoringEnableIPs` | `127.0.0.1,192.168.,10.,62.65.161.,85.248.107.,195.168.35.` | IPs allowed to call `monitor.jsp` |
+    | `monitorTestDocId` | `1` | Document ID used for the database availability check |
+    | `monitoringPreheatTime` | `0` | Seconds after startup during which `monitor.jsp` returns unavailability (allows cache warm-up before adding the node to the cluster) |
+    | `monitorMaintenanceMode` | `false` | Set to `true` to put the node into maintenance mode |
+    | `monitoringEnableCountUsersOnAllNodes` | `true` | Set to `false` if public cluster nodes cannot write to `_conf_/webjet_conf` |
+    | `clusterRefreshTimeout` | — | Interval in seconds between cluster node data refreshes |
+  </Accordion>
+</AccordionGroup>
+
+## Performance diagnostics
+
+### Diagnosing a slow page
+
+To profile the execution time of individual applications embedded in a specific page, append `?_writePerfStat=true` to its URL. For example:
+
+```
+/sk/?_writePerfStat=true
+```
+
+This injects `PerfStat:` comments into the HTML output. View the page source and search for `PerfStat:` to find them. The format is:
+
+```
+PerfStat: 3 ms (+3) !INCLUDE(...)
+```
+
+The number in parentheses is the execution time of that specific application. Use `?_disableCache=true` to force uncached execution if you suspect a caching issue.
+
+### Total page generation time
+
+Insert the following into your page template footer to output the full page generation time as an HTML comment:
+
+```html
+!INCLUDE(/components/_common/generation_time.jsp, hide=true, onlyForAdmin=false)!
+```
+
+Output example:
+
+```html
+<!-- generation time: 4511 ms -->
+```
+
+Set `onlyForAdmin=true` to show this only when an administrator is logged in.
+
+### Database and file system speed tests
+
+Two diagnostic scripts are available from the administration. Access requires update rights.
+
+| Script | What it measures |
+|--------|-----------------|
+| `/admin/update/dbspeedtest.jsp` | Database read speed. Compare `per item` values across environments. |
+| `/admin/update/fsspeedtest.jsp` | File system listing speed. Useful when using a network file system. |
+
+### Cache management
+
+#### Web page caching
+
+Enable **page caching** on the **Basic** tab of individual web pages to prevent repeated database lookups for page content. Recommended for your highest-traffic pages (see **Statistics → Top pages**).
+
+#### Application caching
+
+Applications can be cached using the **Buffer time** field in their settings, or by adding `, cacheMinutes=xxx` to the `!INCLUDE(...)` directive in the page HTML. For example:
+
+```html
+!INCLUDE(sk.iway.iwcm.components.reservation.TimeBookApp, reservationObjectIds=2560+2561, cacheMinutes=10)!
+```
+
+<Warning>
+  The application cache is global across the entire server. The cache key is based on the application file path, parameters in the HTML code, and the current page language. URL parameters are **not** part of the key, so do not cache applications that rely on URL parameters for pagination or filtering.
+</Warning>
+
+#### Browser caching (static files)
+
+Control browser-side caching of static assets with:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `cacheStaticContentSeconds` | `300` | Cache-Control max-age in seconds |
+| `cacheStaticContentSuffixes` | `.gif,.jpg,.png,.swf,.css,.js,.woff,.svg,.woff2` | File extensions that receive a Cache-Control header |
+
+For per-URL overrides, use the **HTTP headers** application under **Settings**.
+
+#### Cache behaviour for administrators
+
+When an administrator is logged in, the application cache is bypassed so they always see current content. To change this behaviour (for example, on an intranet where all users authenticate as administrators), set `cacheStaticContentForAdmin=true`.
+
+### Search engine load
+
+Search engine crawlers and AI bots can generate significant traffic. Their requests may not appear in Google Analytics but are visible in WebJET Statistics. Control bot behaviour via `/files/robots.txt` (WebJET serves this file at `/robots.txt` if present, otherwise generates a default).
+
+### Other performance settings
+
+| Variable | Description |
+|----------|-------------|
+| `disableReverseDns=true` | Disables reverse DNS lookup of visitor IPs, which can add several seconds of latency when a DNS server is unavailable |
+| `statMode=none` | Temporarily disables statistics write operations during high-traffic periods or performance investigations (default value is `new`) |
+
+## Log files and log levels
+
+### Viewing log files
+
+Navigate to **Audit → Log files** to see a list of all log files and their storage path. Click a filename to open its contents. The viewer supports filtering by regular expression or plain text search.
+
+Log files are read-only in the administration. To modify or rotate them, access the file system directly.
+
+### Adjusting log levels
+
+Navigate to **Audit → Logging levels** to manage the log level per Java package without restarting the server.
+
+The table always contains a **Main logging level** row, controlled by the `logLevel` configuration variable. All other rows are controlled by the `logLevels` variable, which holds one package-level entry per line:
+
+```
+sk.iway=DEBUG
+sk.iway.iwcm=WARN
+org.springframework=WARN
+```
+
+Changes take effect immediately in memory. To persist them across restarts, select **Save to database** in the editor before saving.
+
+<Note>
+  The `NORMAL` value is only valid for the main logging level. All other standard log levels (`DEBUG`, `INFO`, `WARN`, `ERROR`) are available for individual packages.
+</Note>
+
+### In-memory log viewer
+
+Navigate to **Audit → Latest logs** to view the most recent log entries without file system access. This viewer shows entries captured by the `InMemoryLoggerAppender` — it does not show output written to `System.out` or `System.err`.
+
+Cluster support is included: you can request recent logs from another node.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `loggingInMemoryEnabled` | `true` | Enable or disable in-memory log storage |
+| `loggingInMemoryQueueSize` | `200` | Maximum number of entries held in memory — keep this low to limit memory use |
+
+For the in-memory log viewer to work, `logback.xml` must include the `IN_MEMORY` appender:
+
+```xml
+<appender name="IN_MEMORY" class="sk.iway.iwcm.system.logging.InMemoryLoggerAppender" />
+
+<root level="ERROR">
+    <appender-ref ref="STDOUT" />
+    <appender-ref ref="IN_MEMORY" />
+</root>
+```
+
+## Audit notifications
+
+Navigate to **Audit → Notification list** to configure email alerts for specific audit event types. Recommended notifications to set up:
+
+- `XSS` — detected cross-site scripting attempts
+- `SQLERROR` — database errors
+- `CONF_UPDATE` / `CONF_DELETE` — configuration variable changes
+- `PROP_UPDATE` / `PROP_DELETE` — translation key changes (JavaScript code can be embedded via translation keys)
+
+You can filter notifications by a required substring in the event description. Configure the sender name and email using `auditDefaultSenderName` and `auditDefaultSenderEmail`.
+
+## Restarting the application
+
+Navigate to **Settings → Restart** to trigger a soft restart from within WebJET. The restart runs on the server side and depends on Tomcat having `reloadable="true"` set for the application context in `server.xml`:
+
+```xml
+<Host name="...">
+    <Context reloadable="true" />
+</Host>
+```
+
+<Warning>
+  Before restarting, confirm that your hosting provider's technical support is available. The application server itself may need restarting separately, which cannot be done from within WebJET. Repeated soft restarts can exhaust application server memory, eventually requiring a full Tomcat restart on the server.
+</Warning>

@@ -1,0 +1,319 @@
+---
+title: "App Store integration"
+description: "Register your custom application in the WebJET CMS App Store, configure its editor dialog, define parameters, and handle multi-step forms."
+---
+
+The App Store is the in-editor application picker that lets content editors insert applications into pages. Registering your application makes it appear in this list with a name, icon, description, and configurable parameters.
+
+## What the App Store is
+
+When a content editor opens the page editor and inserts an application, they see a searchable grid of registered applications. Each entry shows an icon, a name, and a short description. Clicking an entry opens a property dialog where the editor can configure the application before it is embedded as an `!INCLUDE()!` tag in the page.
+
+## Registering a custom application
+
+Add the `@WebjetAppStore` annotation to your component class alongside `@WebjetComponent`:
+
+```java
+@WebjetComponent("sk.iway.basecms.contact.ContactApp")
+@WebjetAppStore(
+    nameKey = "Contacts",
+    descKey = "Sample application with a list of contacts",
+    imagePath = "ti ti-id",
+    galleryImages = "/components/map/screenshot-1.jpg,/components/gdpr/screenshot-2.png"
+)
+@Getter
+@Setter
+public class ContactApp extends WebjetComponentAbstract {
+    // ...
+}
+```
+
+### Annotation parameters
+
+| Parameter        | Description |
+|------------------|-------------|
+| `nameKey`        | Translation key (or direct text) for the application name shown in the App Store list. |
+| `descKey`        | Translation key for the application description. Defaults to `nameKey.desc` (or replaces `.title` with `.desc` if `nameKey` ends in `.title`). |
+| `itemKey`        | Unique identifier for access rights management, e.g. `cmp_contact`. |
+| `variant`        | Application variant identifier. Use when multiple apps share the same `itemKey`. |
+| `imagePath`      | Path to an icon image, or a Tabler Icons CSS class such as `ti ti-id`. See [tabler.io/icons](https://tabler.io/icons). |
+| `galleryImages`  | Comma-separated list of screenshot paths shown in the app description dialog. |
+| `componentPath`  | For legacy JSP applications: path(s) to the JSP file(s), e.g. `/components/gallery/gallery.jsp`. The first path is used when a new instance is inserted. |
+| `domainName`     | Restrict the app to specific domains in multi-domain installations (comma-separated). |
+| `commonSettings` | Set to `false` to hide the View tab (device visibility settings) in the editor. Default is `true`. |
+| `custom`         | Set to `true` for customer applications. They appear at the top of the App Store list. |
+| `customHtml`     | Path to an HTML file with additional JavaScript executed in the editor when editing this app's properties. |
+
+### Package scanning
+
+WebJET scans the following packages for `@WebjetAppStore` annotations:
+
+- `sk.iway.iwcm` — standard WebJET applications (appear at the end of the list)
+- `sk.iway.INSTALL_NAME` — customer applications (appear at the top of the list)
+- `sk.iway.LOG_INSTALL_NAME` — applications by log install name
+- Packages listed in the `springAddPackages` configuration variable
+
+To promote an application to the promo section at the very top of the list, add its key to the `appstorePromo` configuration variable.
+
+## Application parameters dialog
+
+Each field declared in the component class and annotated with `@DataTableColumn` becomes an editable field in the application's property dialog. This works identically to [DataTable editor columns](/developer/datatables/columns).
+
+```java
+@WebjetComponent("sk.iway.demo8.DemoComponent")
+@WebjetAppStore(nameKey = "Demo komponenta", descKey = "Demo komponenta nejaky dlhy opis",
+    imagePath = "ti ti-snowflake text-danger")
+@Getter
+@Setter
+public class DemoComponent extends WebjetComponentAbstract {
+
+    @DataTableColumn(inputType = DataTableColumnType.TEXT, tab = "basic")
+    private String stringField;
+
+    @DataTableColumn(inputType = DataTableColumnType.CHECKBOX, tab = "basic")
+    private boolean primitiveBooleanField;
+
+    @DataTableColumn(inputType = DataTableColumnType.TEXT_NUMBER, tab = "basic")
+    private int primitiveIntegerField;
+
+    @DataTableColumn(inputType = DataTableColumnType.DATETIME, title = "date", tab = "advanced")
+    private Date date;
+
+    @DataTableColumn(inputType = DataTableColumnType.JSON, title = "groupDetails", tab = "json",
+        className = "dt-tree-group")
+    private GroupDetails groupDetails;
+
+    @DataTableColumn(inputType = DataTableColumnType.JSON, title = "docDetails", tab = "json",
+        className = "dt-tree-page")
+    private DocDetails docDetails;
+
+    @DataTableColumn(inputType = DataTableColumnType.JSON, className = "dt-tree-dir-simple",
+        title = "components.gallery.dir", editor = {
+            @DataTableColumnEditor(
+                attr = { @DataTableColumnEditorAttr(key = "data-dt-field-root", value = "/images/gallery") }
+            )
+        })
+    private String dir = "/images/gallery";
+
+    @DefaultHandler
+    public String render(Model model) {
+        model.addAttribute("demoComponent", this);
+        return "/components/aceintegration/demo-component/view";
+    }
+}
+```
+
+The parameters set in the editor are serialized into the `!INCLUDE()!` tag and re-injected into the class fields when the page renders.
+
+### Supported field types
+
+The `DataTableColumnType` enum provides the full range of input types available in the DataTable editor, including `TEXT`, `CHECKBOX`, `TEXT_NUMBER`, `SELECT`, `DATETIME`, `JSON` (for page/folder pickers), and `IFRAME` (for embedding an admin sub-page as a tab).
+
+### Organizing fields into tabs
+
+Use `@DataTableTabs` at the class level and the `tab` attribute on each `@DataTableColumn` to group fields into named tabs:
+
+```java
+@DataTableTabs(tabs = {
+    @DataTableTab(id = "basic", title = "components.universalComponentDialog.title", selected = true),
+    @DataTableTab(id = "componentIframe", title = "components.gallery.images")
+})
+@Getter
+@Setter
+public class GalleryApp extends WebjetComponentAbstract {
+
+    @DataTableColumn(inputType = DataTableColumnType.SELECT, tab = "basic",
+        title = "components.gallery.visual_style")
+    private String style;
+
+    @DataTableColumn(inputType = DataTableColumnType.IFRAME, tab = "componentIframe", title = "&nbsp;")
+    private String iframe = "/admin/v9/apps/gallery/?dir={dir}";
+}
+```
+
+### Setting selection field options dynamically
+
+To populate a `SELECT` field from a static method:
+
+```java
+@DataTableColumn(inputType = DataTableColumnType.SELECT, tab = "basic", editor = {
+    @DataTableColumnEditor(options = {
+        @DataTableColumnEditorAttr(
+            key = "method:sk.iway.basecms.contact.ContactRestController.getCountries",
+            value = "label:value"
+        )
+    })
+})
+private String country;
+```
+
+For runtime-computed options, override `getAppOptions()`:
+
+```java
+@Override
+public Map<String, List<OptionDto>> getAppOptions(ComponentRequest componentRequest,
+                                                   HttpServletRequest request) {
+    Map<String, List<OptionDto>> options = new HashMap<>();
+    List<OptionDto> styleOptions = new ArrayList<>();
+    styleOptions.add(new OptionDto("Pretty Photo", "prettyPhoto", null));
+    styleOptions.add(new OptionDto("PhotoSwipe", "photoSwipe", null));
+    options.put("style", styleOptions);
+    return options;
+}
+```
+
+### Data initialization before the editor opens
+
+Override `initAppEditor()` to execute code when the editor dialog is opened, for example to set default values based on the current page:
+
+```java
+@Override
+public void initAppEditor(ComponentRequest componentRequest, HttpServletRequest request) {
+    String uploadSubdir = UploadFileTools.getPageUploadSubDir(
+        componentRequest.getDocId(),
+        componentRequest.getGroupId(),
+        componentRequest.getPageTitle(),
+        "/images/gallery"
+    );
+    IwcmFile uploadDirFile = new IwcmFile(Tools.getRealPath(uploadSubdir));
+    if ("/images/gallery".equals(dir)) {
+        if (uploadDirFile.exists()) {
+            dir = uploadSubdir;
+        }
+    }
+}
+```
+
+## Conditional display settings
+
+### Device visibility
+
+The View tab in the property dialog lets editors restrict the application to specific device types. The underlying mechanism is the `device` parameter in the `!INCLUDE()!` tag.
+
+Detection is server-side using the `User-Agent` header:
+
+| Device type | Detected when `User-Agent` contains                   |
+|-------------|-------------------------------------------------------|
+| `phone`     | `iphone`, or `mobile` together with `android`         |
+| `tablet`    | `ipad`, `tablet`, `kindle`, or `android` without `mobile` |
+| `pc`        | None of the above                                     |
+
+Combinations are supported, e.g. `phone+tablet`. An empty value displays the app on all devices.
+
+Test device detection by appending `?forceBrowserDetector=phone` (or `tablet`, `pc`) to any page URL.
+
+### Logged-in user visibility
+
+The View tab also controls visibility based on login status via the `showForLoggedUser` parameter:
+
+| Value           | Behavior                                    |
+|-----------------|---------------------------------------------|
+| _(empty)_       | Always displayed                            |
+| `onlyLogged`    | Displayed only to logged-in users           |
+| `onlyNotLogged` | Displayed only to users who are not logged in |
+
+In the page editor preview, the application is always shown regardless of this setting.
+
+### Buffer time
+
+The **Buffer time (minutes)** setting caches the rendered HTML output of the application in memory. The cache is bypassed when:
+
+- the current user is an administrator (unless `cacheStaticContentForAdmin=true`)
+- the `cacheMinutes` value is less than 1
+- the URL contains a `page` parameter with a value other than 1
+- the URL contains `_disableCache=true`
+
+## Additional HTML code in the editor
+
+For advanced editor customization, set `customHtml` in `@WebjetAppStore` to point to an HTML file containing JavaScript hooks:
+
+```java
+@WebjetAppStore(
+    nameKey = "components.calendar.title",
+    itemKey = "cmp_calendar",
+    imagePath = "/components/calendar/editoricon.png",
+    customHtml = "/apps/calendar/admin/editor-component.html"
+)
+public class CalendarApp extends WebjetComponentAbstract {}
+```
+
+The HTML file can implement any of these JavaScript functions:
+
+```html
+<script>
+    function appBeforeXhr(data) {
+        // Called before fetching editor data; modify the request object
+    }
+
+    function appAfterXhr(response) {
+        // Called after fetching editor data; modify the response
+    }
+
+    function appAfterInit(response, datatable, componentPath, isInsert) {
+        // Called after the editor initializes; attach event listeners here
+        window.addEventListener("WJ.DTE.opened", function(e) {
+            $("#DTE_Field_someField").on("change", function() {
+                // React to field changes
+            });
+        });
+    }
+
+    function appGetComponentPath(componentPath, datatable) {
+        // Return a modified component path based on field values
+        let field = $("#DTE_Field_type").val();
+        return `/components/myapp/${field}.jsp`;
+    }
+
+    function appGetComponentCode(componentPath, params, datatable, isInsert) {
+        // Return the complete !INCLUDE() code, or null to use the default
+        return null;
+    }
+
+    async function appCodeExecute(params) {
+        // Called when the editor OK button is clicked
+        // Can call a REST service before the include tag is inserted
+        return true;
+    }
+</script>
+```
+
+## The FormProcessorInterface for form-handling apps
+
+Multi-step forms support a Java class as a **form processor**. This allows custom validation, interception between steps, and custom save logic.
+
+### Creating a form processor
+
+Create a Spring component that implements `FormProcessorInterface`:
+
+```java
+@Component
+public class FormEmailVerificationProcessor implements FormProcessorInterface {
+    // implement required methods
+}
+```
+
+Once registered as a Spring bean, the processor appears in the form editor's **Form Processor** selector automatically. The class `FormSettingsService` collects all registered processors.
+
+<Warning>
+Form processor methods are loaded and called by `MultistepFormsService`. Make sure your class is in a package included in `@ComponentScan`.
+</Warning>
+
+### Interface methods
+
+`FormProcessorInterface` defines three methods:
+
+<AccordionGroup>
+  <Accordion title="validateStep">
+    Called during step validation, before saving. Perform any step-specific validation here. Return validation errors to prevent the form from advancing to the next step.
+  </Accordion>
+
+  <Accordion title="runStepInterceptor">
+    Called after step validation passes but before the step data is saved. Use this to execute side effects between steps — for example, sending a verification email or SMS with a code required in the next step.
+  </Accordion>
+
+  <Accordion title="handleFormSave">
+    Called when the entire multi-step form is submitted for final saving. Returns a `boolean`: if `true`, the standard WebJET form saving is also executed; if `false`, only your custom save logic runs. Use this to integrate with external systems such as a CRM.
+  </Accordion>
+</AccordionGroup>
+
+Full method signatures and parameter documentation are in [`FormProcessorInterface.java`](https://github.com/webjetcms/webjetcms/blob/main/src/main/java/sk/iway/iwcm/components/multistep_form/support/FormProcessorInterface.java).

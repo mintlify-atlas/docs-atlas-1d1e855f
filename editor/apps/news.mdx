@@ -1,0 +1,133 @@
+---
+title: 'News'
+description: 'Use the News application to display lists of news articles, press releases, or similar content from a folder of web pages.'
+keywords: ['news', 'articles', 'press releases', 'news list', 'news calendar', 'perex', 'publication date']
+---
+
+The News application inserts a list of web pages from a specified folder into a page. It is commonly used for news, press releases, and similar listings such as contact points or product lists.
+
+## Managing news articles
+
+The news list in the administration is located in the **Posts > News** menu. It looks similar to the web pages list but without a tree structure. At the top you can select the folder whose news you want to display.
+
+Clicking on a news article title opens the same editor as the standard page editor, where you can edit the title, perex (annotation), body text, image, and publication dates.
+
+<Note>
+The folder selector is populated automatically by scanning page bodies for embedded News applications, or you can configure it manually using the `newsAdminGroupIds` configuration variable.
+</Note>
+
+## Embedding the News app on a page
+
+To embed the News application on a web page, open the page in the editor and insert the News application. The dialog has the following tabs.
+
+### Application parameters
+
+<AccordionGroup>
+  <Accordion title="Source and scope">
+    - **Directory** — select the folder (or folders) from which news articles will be loaded.
+    - **Include subdirectories** — also loads news from subfolders of the selected directories.
+    - **Depth of subfolders** — maximum subfolder search depth when loading from subfolders. A value less than 1 means no limit.
+    - **Exclude main folder pages** — excludes the main page of each subfolder from the news list (useful when subfolders each have their own list page).
+  </Accordion>
+  <Accordion title="Filtering by date">
+    The **Types of pages** field controls which articles are shown based on their publication validity dates:
+
+    | Option | Description |
+    |---|---|
+    | Current | Only articles whose validity range includes today |
+    | Old | Articles whose end date is in the past (archive) |
+    | All | All articles regardless of dates |
+    | Next | Articles with a future publication start date |
+    | Currently valid | Articles with a filled start date whose range is valid at the current date and time |
+  </Accordion>
+  <Accordion title="Ordering and pagination">
+    - **Arrange by** — sort articles by: Priority, Date of start of publication, Date of the event, Date of last change, Page title, Places, Page ID, or Rating.
+    - **Ascending** — reverses the sort order (oldest to newest by default).
+    - **Pagination** — shows page navigation when the number of articles exceeds the page limit.
+    - **Number of items on the page** — how many articles to show per page. Without pagination enabled, this caps the total number loaded (useful for "latest 3 news" widgets on a homepage).
+    - **Skip the first** — skips a number of records from the start of the list (useful when two News apps on the same page show different sets of articles).
+  </Accordion>
+  <Accordion title="Other options">
+    - **It is not necessary to fill in the perex** — by default only articles with a filled perex are shown; check this to also include articles without one.
+    - **Loading with page text** — loads the full page body text for use in templates. Slower and more demanding on the database.
+    - **Check for duplication** — when multiple News apps appear on the same page, prevents the same article from appearing more than once.
+    - **Main page view mode** — controls whether the main pages of subfolders are included or excluded from the list.
+  </Accordion>
+</AccordionGroup>
+
+### Template
+
+The Template tab lets you choose the visual style used to render the news list. If you have the appropriate permissions, you can also create new templates or edit existing ones.
+
+### Perex groups
+
+Use the Perex Groups tab to filter news by perex group — for example, to show only articles tagged as "Top News" in a featured section, and then exclude that group from the main news list below to avoid duplicates.
+
+- **Show only selected perex groups** — restricts the list to articles in the chosen group(s).
+- **Do not show selected perex groups** — excludes articles from the chosen group(s).
+
+### Filter
+
+The Filter tab provides advanced filtering based on database field values. Multiple conditions are combined with AND logic.
+
+### News (quick edit)
+
+The News tab inside the app dialog shows the list of articles loaded from the configured directories. You can edit article titles, photos, and text directly, or create a new article without leaving the page editor.
+
+## News calendar integration
+
+The **News calendar** application works together with the News application. When a visitor selects a date in the calendar, the linked News list automatically filters to show only articles whose publication start date matches the selected date.
+
+<Steps>
+  <Step title="Insert the News calendar app">
+    Add the News calendar application to your page first.
+  </Step>
+  <Step title="Insert the News app">
+    Insert the News application directly after the calendar on the same page.
+  </Step>
+  <Step title="Set the same folder">
+    Both applications must point to the same news folder. The first News app on the page is automatically linked to the calendar.
+  </Step>
+</Steps>
+
+<Warning>
+If the News and News calendar applications point to different folders, the calendar filtering will not work correctly.
+</Warning>
+
+## URL-based search and filtering
+
+The News application supports filtering articles via URL parameters, allowing visitors to filter results by category, date range, keyword, or any other field.
+
+The format is:
+
+```text
+search[fieldName_searchType]=value
+```
+
+For example, to filter articles whose title contains "finance":
+
+```text
+/news/?search%5Btitle_co%5D=finance
+```
+
+Available search types:
+
+| Code | Meaning |
+|---|---|
+| `eq` | Exact match |
+| `gt` | Greater than |
+| `ge` | Greater than or equal |
+| `le` | Less than or equal |
+| `lt` | Less than |
+| `sw` | Starts with |
+| `ew` | Ends with |
+| `co` | Contains |
+| `swciai` | Starts with (case and diacritics insensitive) |
+| `ewciai` | Ends with (case and diacritics insensitive) |
+| `cociai` | Contains (case and diacritics insensitive) |
+
+Multiple `search` parameters can be combined; all conditions are joined with AND.
+
+<Note>
+Some servers reject the literal `[]` characters in URLs. Use URL encoding instead: `[` → `%5B`, `]` → `%5D`.
+</Note>

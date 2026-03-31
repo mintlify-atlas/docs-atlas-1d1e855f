@@ -1,0 +1,58 @@
+---
+title: "Operations overview"
+description: "A guide for system and infrastructure administrators responsible for running, monitoring, and securing WebJET CMS in production."
+keywords: ["sysadmin", "operations", "infrastructure", "administration", "system administrator"]
+---
+
+This section is for **system and infrastructure administrators** — people responsible for deploying, running, and maintaining WebJET CMS servers. It covers day-to-day operational tasks: monitoring server health, hardening security, managing updates, and keeping audit trails.
+
+If you are a content editor or a developer building custom applications, see the [Editor Guide](/editor/webpages) or [Developer Guide](/developer/frontend/overview) instead.
+
+## Core responsibilities
+
+As a WebJET CMS system administrator, your main operational areas are:
+
+<CardGroup cols={2}>
+  <Card title="Monitoring" icon="chart-line" href="/sysadmin/monitoring">
+    Track server load, memory, database query performance, and availability. Integrate with external tools like Nagios or Zabbix.
+  </Card>
+  <Card title="Security" icon="shield-halved" href="/sysadmin/security">
+    Harden the installation against attacks: configure HTTP headers, block file paths, restrict admin access by IP, and manage password policies.
+  </Card>
+  <Card title="Updates" icon="arrow-up-right-dots" href="/sysadmin/updates">
+    Apply version upgrades through the built-in update interface or by uploading update packages directly.
+  </Card>
+  <Card title="Audit & logging" icon="list-check" href="/sysadmin/monitoring#log-files-and-log-levels">
+    View log files, adjust log levels per Java package, and set up email notifications for security-critical events.
+  </Card>
+</CardGroup>
+
+## Key operational concepts
+
+### Configuration variables
+
+Almost all operational settings in WebJET CMS are controlled through **configuration variables**, managed under **Settings → Configuration**. Throughout this section, variables are referenced by name (for example, `serverMonitoringEnable`). You can search for and edit them directly in the administration.
+
+<Note>
+  Some configuration variable changes require an application server restart to take effect. This is noted where relevant.
+</Note>
+
+### Application server (Tomcat)
+
+WebJET CMS runs on Apache Tomcat 10+. System administrators are responsible for configuring Tomcat — including the `server.xml` connector settings, restart behaviour, and error reporting. Several security hardening steps described in this section require direct edits to Tomcat configuration files.
+
+### Cluster deployments
+
+WebJET CMS supports clustered deployments with multiple nodes. Monitoring, session management, and cache operations all have cluster-aware behaviour. Where a feature behaves differently in a cluster, this is called out explicitly.
+
+### Audit trail
+
+Every significant action performed in the administration — page saves, configuration changes, file uploads, user logins — is recorded in the audit log. The audit subsystem is always active and cannot be disabled.
+
+## In this section
+
+| Page | What it covers |
+|------|----------------|
+| [Monitoring](/sysadmin/monitoring) | Server monitoring application, JPA query tracking, log files, log levels, performance diagnostics, and restarting the application |
+| [Security](/sysadmin/security) | HTTP headers, admin IP restrictions, password policies, penetration testing guidance, and responsible disclosure |
+| [Updates](/sysadmin/updates) | How versioning works, running updates through the UI or file upload, and custom library considerations |

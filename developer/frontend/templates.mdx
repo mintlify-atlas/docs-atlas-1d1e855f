@@ -1,0 +1,405 @@
+---
+title: "Template creation guide"
+description: "How to create WebJET CMS templates — HTML/Thymeleaf structure, required variables, CSS/JS inclusion, CKEditor configuration, thumbnail servlet, and custom page fields."
+keywords: ["templates", "thymeleaf", "ckeditor", "thumbnail", "custom fields", "css", "javascript"]
+---
+
+A WebJET **template** defines the visual shell of a web page: its layout, the CSS and JavaScript it loads, and which include pages provide the header, footer, and menu. This guide walks through creating a template from scratch and configuring the supporting tools.
+
+## What a template is
+
+In WebJET CMS a template has two parts:
+
+1. **An HTML/JSP file on disk** — the physical layout file stored under `/templates/`. It contains the full HTML structure and uses `data-th-*` / `data-iwcm-*` attributes to inject dynamic content.
+2. **A template record in the admin area** — created under Templates → Template List. It links the HTML file to CSS styles, include pages (header, footer, menu), and editor settings.
+
+When a visitor requests a page, WebJET assembles the final HTML by rendering the template file and inserting the header, footer, menu, navigation bar, and the page text at the locations you define.
+
+## Creating a new template file
+
+Start from the Ninja Starter Kit or copy an existing template. A minimal Thymeleaf-based template looks like this:
+
+```html
+<!DOCTYPE html>
+<html lang="en" data-th-lang="${ninja.temp.lngIso}">
+<head>
+  <meta charset="utf-8" data-th-charset="${ninja.temp.charset}" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="Content-type" content="text/html;charset=utf-8"
+        data-th-content="|text/html;charset=${ninja.temp.charset}|" />
+
+  <title data-th-text="|${docDetails.title} - ${ninja.temp.group.siteName}|">Page Title</title>
+
+  <meta name="description" content="WebJET CMS"
+        data-th-content="${ninja.page.seoDescription}" />
+  <meta name="robots" content="noindex"
+        data-th-content="${ninja.page.robots}" />
+
+  <link rel="canonical" data-th-href="${ninja.page.url}" href="#" />
+
+  <!-- Combined CSS and JS — static tags used in-browser, combined by WebJET at runtime -->
+  <combine
+    basePath="|${ninja.temp.basePath}dist/|"
+    data-iwcm-combine="${ninja.userAgent.blind ? 'css/blind-friendly.min.css' : ''}
+    ${ninja.webjet.pageFunctionsPath}"
+  >
+    <link href="css/ninja.min.css" rel="stylesheet" type="text/css"/>
+    <script src="js/jquery-3.6.0.min.js" type="text/javascript"></script>
+    <script src="js/bootstrap.bundle.min.js" type="text/javascript"></script>
+    <script src="js/ninja.min.js" type="text/javascript"></script>
+  </combine>
+
+  <!-- Per-page HTML head additions from admin -->
+  <div data-iwcm-write="group_htmlhead_recursive"></div>
+  <div data-iwcm-write="html_head"></div>
+  <div data-iwcm-script="header"></div>
+</head>
+<body data-th-class="${docDetails.fieldA}">
+
+  <header data-iwcm-write="doc_head" data-iwcm-remove="tag"></header>
+
+  <nav data-iwcm-write="doc_menu"></nav>
+
+  <main>
+    <div data-iwcm-write="navbar"></div>
+    <article data-iwcm-write="doc_data" class="page-body">
+      <!-- Prototype content — replaced at runtime -->
+      <p>Lorem ipsum</p>
+    </article>
+  </main>
+
+  <footer data-iwcm-write="doc_foot" data-iwcm-remove="tag"></footer>
+
+</body>
+</html>
+```
+
+<Tip>
+Because WebJET uses `data-th-*` rather than bare `th:*` attributes, the file is valid HTML and opens in a browser as a prototype. Static values (like "Page Title") are shown when browsing locally; they are replaced by live data when WebJET renders the page.
+</Tip>
+
+## Required template variables
+
+The objects below are injected by WebJET when a page is rendered and are available in every template.
+
+### Page data (`docDetails` / `data-iwcm-write`)
+
+| Write attribute | Description |
+|---|---|
+| `doc_data` | The body text of the page as entered in the editor |
+| `doc_title` | Page title |
+| `doc_head` | HTML from the header include page defined in the template |
+| `doc_foot` | HTML from the footer include page |
+| `doc_menu` | HTML of the navigation menu |
+| `doc_right_menu` | HTML of the right-side menu |
+| `navbar` | Breadcrumb navigation bar |
+| `html_head` | Additional HTML code entered for this page in the Advanced tab |
+| `group_htmlhead_recursive` | HTML head code from the folder, inherited from parent folders |
+| `base_css_link` | Link to the main CSS file set in the template record |
+| `css_link` | Link to the secondary CSS file |
+| `field_a` … `field_l` | Custom fields for the page (see [Custom fields](#custom-fields)) |
+
+### Ninja template objects
+
+Access these via Thymeleaf expressions (`${ninja.xxx}`):
+
+```html
+<!-- Site metadata from the template group -->
+<meta name="author"    data-th-content="${ninja.temp.group.author}" content="Author" />
+<meta name="copyright" data-th-content="${ninja.temp.group.copyright}" content="Copyright" />
+<meta name="generator" data-th-content="${ninja.temp.group.generator}" content="WebJET CMS" />
+
+<!-- SEO -->
+<meta property="og:title"       data-th-content="${ninja.page.seoTitle}" content="Title" />
+<meta property="og:description" data-th-content="${ninja.page.seoDescription}" content="Desc" />
+<meta property="og:url"         data-th-content="${ninja.page.url}" content="http://example.com" />
+<meta property="og:image"
+      data-th-content="|${ninja.page.urlDomain}${ninja.page.seoImage}|"
+      content="assets/images/og.png" />
+
+<!-- Canonical URL -->
+<link rel="canonical" data-th-href="${ninja.page.url}" href="#" />
+
+<!-- Favicon paths -->
+<link rel="icon" data-th-href="|${ninja.temp.basePathImg}favicon.ico|" href="assets/images/favicon.ico" />
+```
+
+### Thymeleaf attribute patterns
+
+WebJET always uses the `data-th-` prefix so templates remain valid HTML:
+
+```html
+<!-- Replace element text -->
+<span data-th-text="${docDetails.title}">Page Title</span>
+
+<!-- Replace an attribute -->
+<body data-th-class="${docDetails.fieldA}">
+
+<!-- Conditional rendering -->
+<i data-th-if="${!docDetails.available}" class="ti ti-chevron-down"></i>
+
+<!-- Loop -->
+<option
+  data-th-each="domain : ${layout.header.domains}"
+  data-th-text="${domain}"
+  data-th-value="${domain}"
+></option>
+
+<!-- Include another HTML file -->
+<div data-th-replace="/templates/INSTALL_NAME/includes/header.html"></div>
+
+<!-- Insert HTML without escaping -->
+<div data-th-utext="${ninja.temp.insertTouchIconsHtml}" data-th-remove="tag"></div>
+```
+
+Use `data-th-utext` (instead of `data-th-text`) when the value contains HTML that must not be escaped.
+
+## Including CSS and JavaScript
+
+### Via `data-iwcm-combine`
+
+The recommended approach bundles all CSS and JS files into combined requests:
+
+```html
+<combine
+  basePath="|${ninja.temp.basePath}dist/|"
+  data-iwcm-combine="${ninja.webjet.pageFunctionsPath}"
+>
+  <link href="css/ninja.min.css" rel="stylesheet" type="text/css"/>
+  <script src="js/ninja.min.js" type="text/javascript"></script>
+</combine>
+```
+
+- `basePath` sets the root path prepended to each filename (except paths already starting with `/templates/` or `/components/`).
+- Including `${ninja.webjet.pageFunctionsPath}` in `data-iwcm-combine` tells WebJET that jQuery is already bundled in `ninja.min.js`, preventing a duplicate injection.
+- A `?v=` cache-busting parameter is added automatically.
+
+### Direct `<link>` / `<script>` tags
+
+For files that should not be combined (e.g. a third-party CDN script), use standard tags with `data-th-src` or `data-th-href` for dynamic paths:
+
+```html
+<script
+  data-th-src="${'/components/aceintegration/admin/pagesupport-custom.js?v=' + version}"
+  src="/components/aceintegration/admin/pagesupport-custom.js"
+></script>
+```
+
+### Editor-only CSS
+
+The admin page editor automatically loads `/templates/TEMPLATE_NAME/dist/css/editor.css`. Use this file to override styles that only apply inside the editor without affecting the live site.
+
+## Thymeleaf features specific to WebJET
+
+### `data-iwcm-write` and `data-iwcm-remove`
+
+The `data-iwcm-write` attribute injects content from WebJET into the element. The wrapping element is preserved or removed based on:
+
+- Attribute name starts with `doc_` → wrapper **preserved** (unless `data-iwcm-remove="tag"` is set)
+- Attribute name does not start with `doc_` → wrapper **removed** by default
+
+```html
+<!-- Header element removed, only its content inserted -->
+<header data-iwcm-write="doc_head" data-iwcm-remove="tag"></header>
+
+<!-- article element preserved, class retained for styling -->
+<article data-iwcm-write="doc_data" class="page-body"></article>
+
+<!-- div removed, include output inserted directly -->
+<div data-iwcm-write="!INCLUDE(/components/gdpr/gtm_init.jsp)!"></div>
+```
+
+### Inserting scripts from the scripts application
+
+```html
+<div data-iwcm-script="header"/>
+```
+
+### Inserting the version parameter
+
+WebJET initialises `version` to a timestamp that changes when all caches are cleared. Use it to force reloads of versioned files:
+
+```html
+<script data-th-src="${'/components/my/script.js?v=' + version}"></script>
+```
+
+### Calling static Java methods
+
+```html
+<span data-th-text="${T(sk.iway.iwcm.Tools).formatDateTimeSeconds(demoComponent.date)}"></span>
+```
+
+### Unique ID placeholder
+
+Use `__ID__` in blocks where a unique element ID is required. It is replaced with a random timestamp value when the block is inserted:
+
+```html
+<div class="carousel" id="carousel__ID__" data-bs-ride="carousel">
+  <button data-bs-target="#carousel__ID__" data-bs-slide="prev"></button>
+</div>
+```
+
+## CKEditor configuration
+
+WebJET uses a customised CKEditor 4 for page text editing. The following configuration variables control its behaviour.
+
+### Toolbar
+
+Set `ckeditor_toolbar` (JSON array) to define the toolbar items shown in the website editor. Use `ckeditor_removeButtons` (comma-separated list) to hide individual buttons without rewriting the entire toolbar definition.
+
+### Tables
+
+| Variable | Default | Description |
+|---|---|---|
+| `ckeditor_table_class` | `table table-sm tabulkaStandard` | Default CSS class for tables |
+| `ckeditor_table_cols` | `5` | Default number of columns |
+| `ckeditor_table_rows` | `2` | Default number of rows |
+| `ckeditor_table_width` | `100%` | Default table width |
+| `ckeditor_table_wrapper_class` | `table-responsive` | CSS wrapper class; empty = no wrapper |
+
+### PICTURE element
+
+To enable the `<picture>` element for responsive images, add `WebjetPicture` to `ckeditor_toolbar`. Configure breakpoints via `ckeditor_pictureDialogBreakpoints`:
+
+```json
+[
+  { "name": "Desktop", "minWidth": 992, "fallback": true },
+  { "name": "Tablet",  "minWidth": 768 },
+  { "name": "Mobile",  "minWidth": 0 }
+]
+```
+
+The entry with `"fallback": true` is also inserted as a standard `<img>` for browsers that do not support `<picture>`.
+
+### SVG icons
+
+Set `ckeditor_svgIcon_path` to the path of an SVG sprite file to enable SVG icon insertion. The sprite must contain `<symbol>` elements with `id` attributes:
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+  <symbol viewBox="0 0 80 80" id="my-icon" xmlns="http://www.w3.org/2000/svg">
+    <path d="..." />
+  </symbol>
+</svg>
+```
+
+Additional configuration variables:
+
+| Variable | Description |
+|---|---|
+| `ckeditor_svgIcon_icons` | JSON object defining icon groups; if empty, IDs from the SVG file are used |
+| `ckeditor_svgIcon_width` | Icon width in pixels |
+| `ckeditor_svgIcon_height` | Icon height in pixels |
+| `ckeditor_svgIcon_sizes` | Comma-separated size names, e.g. `small,medium,large` |
+| `ckeditor_svgIcon_colors` | Comma-separated colour names, e.g. `info,success,warning` |
+
+### Custom button
+
+To enable a CTA button element, add `WebjetFormButton` to `ckeditor_toolbar` (or it appears automatically when SVG icons are configured). Customise with:
+
+| Variable | Default | Description |
+|---|---|---|
+| `ckeditor_button_baseClass` | `btn` | Base CSS class |
+| `ckeditor_button_sizes` | `btn-lg,btn-sm` | Available size classes |
+| `ckeditor_button_types` | `btn-primary,btn-secondary,...` | Available type/colour classes |
+| `ckeditor_button_attrs` | `data-bs-toggle,...` | Configurable HTML attributes |
+
+### Custom plugins
+
+Place your plugin files in `src/main/webapp/admin/skins/webjet8/ckeditor/dist/plugins/`. Register them via `ckeditor_extraPlugins` (comma-separated) and add button names to `ckeditor_toolbar`.
+
+## Thumbnail servlet for responsive images
+
+WebJET can generate resized images on demand from any file in `/images`, `/files`, `/shared`, `/video`, or `/templates`. Prefix the image URL with `/thumb` and append `w` and `h` parameters:
+
+```html
+<!-- Original: /images/gallery/photo.jpg -->
+<!-- Resized to fit within 400×300 px: -->
+<img src="/thumb/images/gallery/photo.jpg?w=400&h=300" alt="Photo" />
+```
+
+The generated image fits within the requested dimensions while preserving aspect ratio. For exact sizing with a crop, use the `ip` (interest point) parameter:
+
+```html
+<!-- Crop to exactly 160×160, interest point 5 (centre) -->
+<img src="/thumb/images/photo.jpg?w=160&h=160&ip=5"
+     class="fixedSize-160-160-5" alt="Photo" />
+```
+
+<Tip>
+Set the CSS class `fixedSize-W-H-IP` on images in Page Builder blocks. When an editor replaces the image, WebJET automatically applies the same dimensions and interest point to the new image URL.
+</Tip>
+
+When an image with a URL containing `placeholder` or `stock` is clicked in the editor, the image picker opens in the page's Media folder rather than the folder of the placeholder image, making it easy for editors to upload a real image.
+
+## Custom fields for pages
+
+Custom fields let template authors expose additional per-page attributes to content editors. They appear in the web page editor under the Custom Fields tab and map to `field_a` through `field_t` (pages) or `group_field_a` through `group_field_d` (folders).
+
+Access the value in a template:
+
+```html
+<!-- Using data-iwcm-write -->
+<div data-iwcm-write="field_a"></div>
+
+<!-- Using Thymeleaf -->
+<body data-th-class="${docDetails.fieldA}">
+```
+
+### Configuring field types
+
+Field types are set via translation keys in the configuration. The key format is `editor.field_x.type` (for the default language):
+
+<AccordionGroup>
+  <Accordion title="Text and textarea">
+
+```
+editor.field_a.type=text
+editor.field_a.type=text-160, warningLength-50
+editor.field_b.type=textarea
+```
+
+  </Accordion>
+  <Accordion title="Selection fields">
+
+```
+# Single select
+editor.field_c.type=Option A|Option B|Option C
+
+# Single select with blank option
+editor.field_c.type=|Option A|Option B|Option C
+
+# Multi-select
+editor.field_c.type=multiple:Option A|Option B|Option C
+```
+
+  </Accordion>
+  <Accordion title="Other types">
+
+| Type value | Field behaviour |
+|---|---|
+| `boolean` | Checkbox |
+| `number` | Numeric input |
+| `date` | Date picker |
+| `image` | Image picker dialog |
+| `link` | File or page link picker |
+| `json_group` / `json_group_null` | Web page folder selector |
+| `json_doc` / `json_doc_null` | Web page selector |
+| `dir` | File system folder selector |
+| `color` | Colour picker with opacity |
+| `uuid` | Auto-generated unique identifier |
+| `enumeration_X` | Selection from codebook type X |
+| `none` | Hidden — field not shown |
+
+  </Accordion>
+</AccordionGroup>
+
+To set different field names or types per template, use the `temp-ID.` prefix:
+
+```
+temp-3.editor.field_a=SEO Description
+temp-3.editor.field_a.type=text-160, warningLength-50
+```
+
+Template groups can also define their own prefix via the **Text key prefix** setting, allowing fields to be named and typed differently across projects using the same WebJET installation.

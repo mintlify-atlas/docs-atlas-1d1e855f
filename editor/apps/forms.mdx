@@ -1,0 +1,249 @@
+---
+title: 'Forms'
+description: 'Create and manage web forms in WebJET CMS — from simple contact forms to multi-step workflows with email verification.'
+keywords: ['forms', 'contact form', 'multi-step form', 'form submissions', 'email verification', 'double opt-in', 'form export']
+---
+
+WebJET CMS provides three ways to add forms to your pages, each suited to different levels of complexity.
+
+<CardGroup cols={3}>
+  <Card title="Simple Form" icon="bolt">
+    Quick setup for basic contact and inquiry forms. No HTML knowledge needed.
+  </Card>
+  <Card title="Advanced Form" icon="sliders">
+    Full control over field types, multi-step flows, validation, and processors.
+  </Card>
+  <Card title="Multi-step Form" icon="list-ol">
+    Split long forms into multiple steps for better user experience.
+  </Card>
+</CardGroup>
+
+---
+
+## Simple Form
+
+The Simple Form application is designed for quick creation of basic forms. The form layout is handled automatically according to the site's design — you only need to configure the fields and recipients.
+
+### Basic settings
+
+When you embed the Simple Form app on a page, configure the following in the **Basic** tab:
+
+- **Unique form name** — a name that identifies this form across the entire site. It must be unique.
+- **Email address of the recipient** — comma-separated list of email addresses to receive submissions.
+- **Line view** — displays fields side by side in a row instead of stacked vertically. Insert a **New Row** field to start a new row.
+- **Text at the beginning / end of the email** — optional text added before or after the field values in the notification email.
+- **Send email as text without formatting** — sends a plain-text email (`field name: value` format) instead of an HTML version.
+- **Add technical information** — appends page name, URL, date/time, and browser info to the email.
+
+### Advanced settings
+
+The **Advanced** tab contains optional settings:
+
+- **Recipient of a copy / Invisible recipients** — CC and BCC email addresses.
+- **Subject of the email** — custom email subject; defaults to the page title if left blank.
+- **Redirection after completion / after an error** — URL to redirect visitors after the form is submitted or if it fails.
+- **Redirection method** — controls how the redirect is handled after submission (`forward` for internal redirect, `addParams` to append form values to the URL).
+- **Doc id notifications for user** — ID of a page whose content is emailed to the visitor after successful submission (e.g., a thank-you message). Use `!field-name!` expressions in the page to insert submitted values.
+- **Encryption key** — encrypts stored form values.
+
+### Adding form fields
+
+In the **Items** tab, you can add, edit, duplicate, reorder (drag and drop), and delete form fields.
+
+When adding or editing a field, select a **Field Type** from the dropdown. Available options depend on your site's design configuration. Common properties for each field:
+
+| Property | Description |
+|---|---|
+| **Name** | Label shown to the visitor. If blank, the field type name is used. |
+| **Value** | Pre-filled value shown when the form loads. |
+| **Representative text** | Placeholder text shown when the field is empty. |
+| **Required field** | Makes this field mandatory before the form can be submitted. |
+| **Tooltip** | Adds an information bubble next to the field label. |
+
+<Tip>
+If the **Value** field is blank and a **Representative text** is set, the field label is hidden and only the placeholder is shown — useful for compact forms.
+</Tip>
+
+For **groups of fields** (radio groups, checkboxes), enter the options in the **Value** field separated by `|` or `,`. For example: `Option A|Option B|Option C`.
+
+For **selection lists** (dropdowns), you can define separate display text and submitted value using `:` — for example, `Orange:orange,Apple:apple` displays "Orange" and "Apple" but submits `orange` and `apple`.
+
+---
+
+## Advanced Form (Forms application)
+
+The **Applications > Forms** section provides advanced form management. Forms can be submitted by email, stored in the database, and exported to Excel.
+
+### Creating a form
+
+<Steps>
+  <Step title="Open the Forms application">
+    Go to **Applications > Forms** and click the Add icon.
+  </Step>
+  <Step title="Fill in the Basic tab">
+    Enter a **unique form name** and the **recipient email address**. New forms are always created as multi-step forms.
+  </Step>
+  <Step title="Add form items">
+    Click the form name in the list to open it, then go to the **Items on the form** tab to add fields and steps.
+  </Step>
+  <Step title="Embed the form on a page">
+    Insert the Form application into your page and select the form name you created.
+  </Step>
+</Steps>
+
+### Settings tab
+
+- **Redirection after completion / after an error** — where to send visitors after submission.
+- **Save copy as PDF** — saves a PDF version of each submission.
+- **Allow only one send** — prevents logged-in users from submitting the same form more than once.
+- **Overwrite older dispatch** — replaces a logged-in user's previous submission rather than creating a new record.
+- **Send the form as an attachment to an email** — attaches the form as an HTML file to the notification email.
+- **Encryption key** — encrypts stored form values.
+- **Doc id notifications for user** — ID of a page sent as an email to the visitor after submission.
+
+### Email settings
+
+- **Reply to emails** — sets the `Reply-To` header in the notification email.
+- **Subject of the email** — custom subject for the admin notification.
+- **Text at the beginning / end of the email** — additional text prepended or appended to the email body.
+- **Add technical information** — includes page name, URL, submission date, and browser details in the email.
+- **Email header** — comma-separated list of field names whose values are set as email headers.
+
+<Warning>
+The system uses fields named `email` or `e-mail` as the sender's email address, and fields named `name`, `firstname`, or `lastname` as the sender's name. Name these fields correctly for contact forms so email replies work as expected.
+</Warning>
+
+### Advanced settings
+
+- **Line view** — enables side-by-side field layout. Use a **New Row** field to control row breaks.
+- **Add CSS classes / styles** — applies additional CSS to the form wrapper element.
+- **Redirection method** — `forward` for internal redirect, `addParams` to append values to the URL.
+- **Forms processor** — Java class name implementing `FormProcessorInterface` for custom form handling logic (e.g., email verification).
+- **Maximum file size** — maximum size in bytes for uploaded files.
+- **Allowed suffixes** — comma-separated list of allowed file extensions, e.g. `jpg,png,pdf,docx`.
+- **Maximum height / width (for images)** — maximum dimensions in pixels for uploaded images.
+
+---
+
+## Multi-step Form
+
+Multi-step forms split a long form into a sequence of steps, improving usability. The form editor is divided into three columns: **Form steps**, **Items on the form**, and **Preview**.
+
+### Managing steps
+
+In the **Form steps** column, you can add, edit, duplicate, delete, and reorder steps.
+
+Each step can have:
+- **Introduction text** — displayed at the beginning of the step.
+- **Button text** — the label of the "next" or "submit" button (defaults to "Go to the next step" or "Send form").
+- **Script Code** — custom HTML/JavaScript inserted and executed when the step is displayed.
+
+<Note>
+Duplicating a step copies all of its items to the new step. Deleting a step also deletes all items within it.
+</Note>
+
+### Managing form items
+
+Select a step in the left column to see and manage its items in the center column. You can add, edit, duplicate, reorder, and delete items.
+
+Item properties:
+
+| Property | Description |
+|---|---|
+| **Field type** | The kind of input (text box, dropdown, checkbox, etc.) |
+| **Required field** | Whether the field must be filled before proceeding |
+| **Allowed value** | Regular expression(s) used for input validation |
+| **Field name** | Label shown to the visitor |
+| **Prefilled value** | Default value for the field |
+| **Representative text** | Placeholder shown when the field is empty |
+| **Tooltip** | Info bubble displayed next to the field label |
+| **Step of the form** | Move this item to a different step |
+
+#### Pre-filling fields from logged-in user data
+
+For logged-in users, you can pre-fill fields automatically using these tags in the **Prefilled value** property:
+
+| Tag | Value |
+|---|---|
+| `!LOGGED_USER_NAME!` | Full name |
+| `!LOGGED_USER_FIRSTNAME!` | First name |
+| `!LOGGED_USER_LASTNAME!` | Last name |
+| `!LOGGED_USER_EMAIL!` | Email address |
+| `!LOGGED_USER_COMPANY!` | Company |
+| `!LOGGED_USER_PHONE!` | Phone number |
+| `!LOGGED_USER_CITY!` | City |
+| `!LOGGED_USER_ADDRESS!` | Street address |
+
+For non-logged-in visitors, these tags are replaced with blank values.
+
+<Warning>
+Do not change a form item's type after it has been created. Instead, delete the existing item and add a new one with the correct type.
+</Warning>
+
+---
+
+## Email verification (anti-spam)
+
+### Double opt-in (email address confirmation)
+
+You can require visitors to confirm their email address before their submission is recorded.
+
+<Steps>
+  <Step title="Enable confirmation in form settings">
+    In the form's Advanced settings, check **Require confirmation of consent by email**.
+  </Step>
+  <Step title="Create a confirmation page">
+    Create a web page and embed the `DoubleOptInComponent` application on it. This page confirms consent when the visitor clicks the link in the email. Example URL: `/confirm-double-optin/`.
+  </Step>
+  <Step title="Create the confirmation email page">
+    Create a page with the email text (e.g., "Click the link below to confirm your email address"). Include the confirmation link using the parameters `!FORM_ID!` and `!OPTIN_HASH!`, for example:
+    ```text
+    /confirm-double-optin/?formId=!FORM_ID!&hash=!OPTIN_HASH!
+    ```
+    Set this page's ID in the **Doc id notifications for user** field.
+  </Step>
+</Steps>
+
+Submissions that have not been confirmed are shown in red in the forms list.
+
+### Verification code (anti-spam for multi-step forms)
+
+As an alternative to double opt-in, you can send a verification code to the visitor's email and require them to enter it in the second step.
+
+<Steps>
+  <Step title="Set the form processor">
+    In the form's Advanced settings, enter the following value in the **Forms processor** field:
+    ```text
+    sk.iway.iwcm.components.multistep_form.support.FormEmailVerificationProcessor
+    ```
+  </Step>
+  <Step title="Set up step 1">
+    Add the fields the visitor must complete in step 1, including an email address field.
+  </Step>
+  <Step title="Set up step 2">
+    Add a field of type **Verification code** to step 2. This displays the code entry field and validates the submitted code.
+  </Step>
+</Steps>
+
+---
+
+## Viewing and exporting submissions
+
+All form submissions are stored in the database and accessible in **Applications > Forms**. Click the eye icon on a submission to view it as it appeared on the web page.
+
+When editing a submission, you can:
+- Update the **note** field to record processing status or comments.
+- View the submitted field values (read-only after submission).
+
+### Export
+
+Submissions can be exported to `.xlsx` or `.csv` format. In the **Advanced** tab of the export dialog, choose one of:
+
+| Option | Description |
+|---|---|
+| Currently filtered data | Exports only the rows matching the current table filter |
+| All data | Exports all submissions regardless of filtering |
+| Not yet exported data | Exports only submissions that have not been exported before |
+| Only selected rows | Exports only the rows you have checked in the table |
+
+After export, the **Last Export Date** column is updated automatically for each exported record.

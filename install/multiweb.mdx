@@ -1,0 +1,151 @@
+---
+title: 'MultiWeb'
+description: 'Run multiple independent domains from a single WebJET CMS installation using the MultiWeb multi-tenant feature.'
+keywords: ['multiweb', 'multi-domain', 'multi-tenant', 'domains', 'webjet']
+---
+
+MultiWeb is a multi-tenant mode for WebJET CMS. A single installation serves multiple independent domains. From the outside each domain appears to be a completely separate WebJET CMS installation, with its own web pages, users, templates, and settings.
+
+## How MultiWeb works
+
+One domain is designated the **control domain** (the first one created). The control domain provides access to global settings that affect all tenants — configuration variables, translation keys, HTTP headers, audit logs, automated tasks, and so on. These global management features are not visible in individual tenant domains.
+
+Each tenant domain has its own:
+- Web page tree
+- Users and user groups
+- Templates (filtered to the folders of that domain)
+- Domain redirects (restricted to the current domain)
+- Media groups (filtered to folders within the domain)
+
+<Note>
+  The control domain should not contain a real public website. It is used exclusively for global administration.
+</Note>
+
+## Restrictions
+
+MultiWeb installations have the following restrictions compared to a standard single-domain setup:
+
+**Web pages**
+- Media groups show only groups whose folder rights are set to folders in the current domain. Newly added media groups automatically receive rights to the root folders of that domain.
+
+**Applications**
+- Domain redirects show only redirects pointing to the current domain.
+
+**Templates**
+- The template list shows only templates that have access set to folders of the currently displayed domain. When a new template is created without explicit access rights, WebJET automatically assigns access to the root folders of the current domain.
+- Template groups shows only those used by the current domain's templates.
+
+**Users**
+- Each domain has its own user list.
+- A user without folder restrictions has the domain's root folders applied internally during permission checks.
+
+## Features available only in the control domain
+
+The following sections and features are only available when logged in through the control domain:
+
+- **Home** — Audit, Server monitoring
+- **Applications** — GDPR (regular expressions and data erasure), Bulk Email domain limits
+- **Users** — User groups, Groups of rights
+- **Control panel** — Configuration, Translation keys, HTTP headers, Data deletion, Automated tasks, WebJET CMS update, Restart
+
+<Tip>
+  To grant a specific user in a tenant domain access to a normally control-domain-only feature, set the configuration variable `multiwebSpecialPerms-USERID` to a comma-separated list of additional permission keys for that user.
+</Tip>
+
+## Setting up MultiWeb
+
+### Prerequisites
+
+- Templates must be configured for multi-domain support. See the frontend template setup documentation for details.
+- Plan your domain aliases before creating domains. An alias simplifies moving a site from a staging domain to a production domain.
+
+### Creating a domain alias
+
+For each domain, create an alias using a configuration key in the format `multiDomainAlias:DOMAIN-NAME`. The value should be a short identifier without spaces, `www`, or domain suffixes — for example `companyname`. The alias is used to locate template files and customized application files.
+
+### Adding a new domain
+
+New domains are currently added by inserting database records directly. Replace `DOMAIN-NAME` with the actual domain name in the SQL below:
+
+```sql
+INSERT INTO `groups` (
+    `group_name`, `internal`, `parent_group_id`, `navbar`, `default_doc_id`,
+    `temp_id`, `sort_priority`, `password_protected`, `menu_type`, `url_dir_name`,
+    `sync_id`, `sync_status`, `html_head`, `logon_page_doc_id`, `domain_name`,
+    `new_page_docid_template`, `install_name`, `field_a`, `field_b`, `field_c`,
+    `field_d`, `logged_menu_type`, `link_group_id`
+)
+VALUES (
+    'DOMAIN-NAME', 0, 0, 'DOMAIN-NAME', -1, 1, 0, '', 2, '/',
+    1, 1, '', -1, 'DOMAIN-NAME', -1, '', '', '', '', '', -1, -1
+);
+
+INSERT INTO `groups` (
+    `group_name`, `internal`, `parent_group_id`, `navbar`, `default_doc_id`,
+    `temp_id`, `sort_priority`, `password_protected`, `menu_type`, `url_dir_name`,
+    `sync_id`, `sync_status`, `html_head`, `logon_page_doc_id`, `domain_name`,
+    `new_page_docid_template`, `install_name`, `field_a`, `field_b`, `field_c`,
+    `field_d`, `logged_menu_type`, `link_group_id`
+)
+VALUES (
+    'System', 1, 0, 'System', -1, 1, 10, NULL, 0, 'system',
+    0, 1, '', -1, 'DOMAIN-NAME', -1, NULL, '', '', '', '', -1, -1
+);
+
+INSERT INTO `users` (
+    `title`, `first_name`, `last_name`, `login`, `password`, `is_admin`,
+    `user_groups`, `company`, `adress`, `city`, `email`, `PSC`, `country`,
+    `phone`, `authorized`, `editable_groups`, `editable_pages`, `writable_folders`,
+    `last_logon`, `module_perms`, `disabled_items`, `reg_date`, `field_a`,
+    `field_b`, `field_c`, `field_d`, `field_e`, `date_of_birth`, `sex_male`,
+    `photo`, `signature`, `forum_rank`, `rating_rank`, `allow_login_start`,
+    `allow_login_end`, `authorize_hash`, `fax`, `delivery_first_name`,
+    `delivery_last_name`, `delivery_company`, `delivery_adress`, `delivery_city`,
+    `delivery_psc`, `delivery_country`, `delivery_phone`, `position`, `parent_id`,
+    `password_salt`, `domain_id`
+)
+VALUES (
+    '', 'DOMAIN-NAME', 'Admin', 'admin',
+    'ead38302881122ab70592e113663c475', 1, NULL, '', '', '',
+    'info@webjet.eu', '', '', '', 1, '', '', '',
+    '2014-08-07 14:43:29', NULL, NULL, '2014-02-05 14:55:46',
+    '', '', '', '', '', NULL, 1, '', '', 0, 0, NULL, NULL,
+    NULL, '', '', '', '', '', '', '', '', '', '', 0, NULL, 230
+);
+```
+
+<Warning>
+  The default admin password for a newly created domain is `Heslo1`. Change it immediately after adding the domain.
+</Warning>
+
+After inserting the records, clear the cache to make the new domain available. Either:
+- Log in to the control domain and go to **Control Panel → Cache Objects** and click **Delete all**, or
+- Restart the application server.
+
+## Rights management across domains
+
+Each domain has its own user list. A user in one domain does not automatically have access to other domains.
+
+Users log in through their own domain's admin interface. When a user has no explicit folder restrictions, WebJET internally applies the domain's root folders as the boundary for permission checks.
+
+To grant a tenant domain user special access to control-domain features (without giving them access to the control domain itself), set:
+
+```properties
+multiwebSpecialPerms-<USERID>=permission1,permission2
+```
+
+Replace `<USERID>` with the numeric user ID.
+
+## Domain-specific settings
+
+Global configuration variables (set in the control domain) apply across all domains. For settings that must differ per domain — such as SMTP credentials, proxy settings, or IP allow-lists — use the external configuration approach with Tomcat context parameters:
+
+```xml
+<Host name="domain1.example.com" appBase="webapps" unpackWARs="false" autoDeploy="false">
+    <Context path="" docBase="../webapps/webjet" reloadable="false" swallowOutput="true">
+        <Parameter name="webjet_smtpServer" value="smtp.domain1.example.com" override="true"/>
+    </Context>
+</Host>
+```
+
+See the [configuration guide](/install/configuration) for a full description of external configuration options.

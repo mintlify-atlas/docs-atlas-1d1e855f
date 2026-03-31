@@ -1,0 +1,293 @@
+---
+title: "Web Pages"
+description: "Manage the page tree, create and edit pages, set publication dates, work with history and redirects, and use the approval workflow."
+---
+
+Web pages in WebJET CMS are organised in a hierarchical tree of folders. Each folder can contain pages and subfolders, forming the navigation structure of your site.
+
+## The page tree
+
+The left panel shows the folder tree for your site. Clicking a folder displays the web pages it contains in the right panel.
+
+<CardGroup cols={2}>
+  <Card title="Folders tab" icon="folder">
+    Shows the standard folder tree. Click any folder to see its pages. You can also enable "Tree structure folders as a table" in tree settings to use bulk operations on folders.
+  </Card>
+  <Card title="Last modified" icon="clock">
+    Lists the pages you have most recently edited, so you can quickly return to work in progress.
+  </Card>
+  <Card title="Pending approval" icon="circle-check">
+    If your site uses the approval workflow, this tab shows pages waiting for your review.
+  </Card>
+  <Card title="System / Trash" icon="trash">
+    The System tab shows template-related pages (header, footer, etc.). The Trash tab shows deleted pages that can be recovered.
+  </Card>
+</CardGroup>
+
+### Domain selection
+
+On multi-domain installations a domain selector appears above the tree. Only folders belonging to the selected domain (and folders with no domain set) are shown.
+
+### Icons and colours
+
+| Icon / colour | Meaning |
+|---|---|
+| Filled folder | Folder is visible in the menu |
+| Empty folder outline | Folder is hidden from the menu |
+| Pin icon | Page is shown in the menu |
+| Pin-off icon | Page is not shown in the menu |
+| Lock icon | Only available to logged-in visitors |
+| Red colour | Page or folder is unavailable to the public |
+| Star / bold | Main (home) page of the folder |
+| External-link arrow | Page has a redirect set |
+
+### Tree settings
+
+Click the settings icon in the tree toolbar to open display options:
+
+- **ID** — shows the folder ID number next to each name.
+- **Order of arrangement** — shows the sort order value.
+- **Website Pages** — also displays individual pages in the tree (reduces performance; useful when moving pages by drag and drop).
+- **Tree structure folders as a table** — enables the Folders tab in the datatable for bulk operations.
+- **Column width ratio** — adjusts the split between the tree and the page list.
+- **Sort tree by** — sort folders by Priority, Name, or Date of creation.
+
+### Searching the tree
+
+Type into the search box above the tree and press Enter to find folders by name. The search covers the entire tree — you do not need to expand folders manually. Click the cancel icon or search for an empty string to clear the filter.
+
+<Note>
+  Switching tabs (Folders / System / Trash) while a search is active clears the search string.
+</Note>
+
+### Viewing pages from subdirectories
+
+Toggle **View pages also from subdirectories** in the datatable header to show pages from the selected folder and all its subfolders in one flat list. Enable the **Parent folder** column in table settings to see where each page lives.
+
+---
+
+## Creating and editing a page
+
+<Steps>
+  <Step title="Select the correct folder">
+    In the tree, click the folder where the new page should live.
+  </Step>
+  <Step title="Click Add">
+    Click the **Add** icon in the datatable toolbar. The page editor opens with a blank form (or a predefined template if the folder has one set).
+  </Step>
+  <Step title="Fill in the Basic tab">
+    Enter the page **Title** — this is the most important field. The title is used as the heading and, by default, to generate the menu item name and URL.
+
+    Set **View** to **Yes** when the page is ready to be publicly visible. A page set to No is only visible to logged-in administrators.
+  </Step>
+  <Step title="Edit the content">
+    Switch to the **Content** tab and write or paste your text in the editor. See [Working in the editor](#working-in-the-rich-text-editor) below.
+  </Step>
+  <Step title="Configure the remaining tabs">
+    Set navigation, access, perex, and scheduling options in the other tabs as needed.
+  </Step>
+  <Step title="Save">
+    Click **Save** to publish immediately, or choose **Save working version** to save a draft without publishing.
+  </Step>
+</Steps>
+
+### URL address
+
+The URL field is filled in automatically when you save a new page — WebJET combines the folder URL with the menu item name. You can edit it manually if needed.
+
+When you change a page's URL, a path redirect is automatically created from the old address to the new one, so existing links continue to work.
+
+<Tip>
+  Select **Automatically generate URL from menu item name** to keep the URL in sync whenever you rename the page or move it to another folder.
+</Tip>
+
+**Inherit start of URL from directory** is an alternative option that always preserves a fixed URL ending (for example `404.html`) while taking the start of the path from the parent folders.
+
+### Saving the page to multiple folders
+
+You can associate a page with more than one folder using the **Classification** section in the Basic tab. The page will appear as a copy in each additional folder. All copies share the same content — only the URL and sort order can differ per copy.
+
+<Warning>
+  Permanently deleting the original page from the trash also permanently deletes all its copies.
+</Warning>
+
+### Editor's note
+
+The **Editor's Note** field in the Basic tab displays a highlighted warning to all editors when they open this page. Use it for important reminders such as "Do not change the URL of this page — it is linked from the footer."
+
+---
+
+## Working in the rich text editor
+
+The **Standard** editor (CKEditor) gives you a visual WYSIWYG interface similar to a word processor.
+
+### Typing and pasting text
+
+| Action | How |
+|---|---|
+| Start a new paragraph | Press `Enter` |
+| Insert a line break within a paragraph | Press `Shift+Enter` |
+| Insert a non-breaking space | Press `Ctrl+Space` |
+| Paste with original formatting | `Ctrl+V` |
+| Paste as plain text (no formatting) | `Ctrl+T` or `Ctrl+Shift+V` |
+| Paste from Word / Excel | `Ctrl+W` or the toolbar icon |
+
+### Headings and styles
+
+Select a heading level or predefined style from the **Style** drop-down in the toolbar. Styles are applied to the whole paragraph — just click inside it, no selection needed. To remove a style, click inside the paragraph and select **Section** (the first item in the drop-down).
+
+<Note>
+  Each page should have only one Heading 1. Because the page title is usually rendered as H1 automatically by the template, you generally do not need to add one inside the editor body.
+</Note>
+
+### Text formatting
+
+Bold (`Ctrl+B`), italic (`Ctrl+I`), underline, strikethrough, subscript, and superscript are available from the toolbar. To remove all formatting from selected text, use the **Remove Format** tool.
+
+### Lists and indentation
+
+Use the numbered list or bulleted list icons to create lists. To nest a list item, click the **Indent** icon. To exit a list, press `Enter` twice at the end of the last item.
+
+### Inserting links
+
+<Steps>
+  <Step title="Select the link text">
+    Highlight the word or phrase you want to make clickable.
+  </Step>
+  <Step title="Open the link dialog">
+    Click the link icon or press `Ctrl+K`.
+  </Step>
+  <Step title="Choose the destination">
+    - **Web pages** — browse the site tree and click a page to copy its URL into the field.
+    - **Media of this page / Files** — browse files attached to this page.
+    - **Media of all sites / Files** — browse the full file directory on the server.
+    - **External URL** — type the full address including `https://` directly in the URL field.
+  </Step>
+  <Step title="Confirm">
+    Click **OK** to insert the link. External links and download files are automatically set to open in a new window.
+  </Step>
+</Steps>
+
+### Inserting images
+
+Place your cursor where the image should go, then click the **Insert image** icon. Browse the directory tree (only image and video files are shown) and click a file to copy its path into the URL field. Always fill in the **Alternative text** field to describe the image for accessibility.
+
+You can also insert images from the integrated **Pixabay** photobank — search for a term, pick an image, and click **Save to WebJET** to download it to your server.
+
+To edit an image after inserting it, click the image and then the pencil icon to open the [image editor](#the-image-editor).
+
+### Inserting tables
+
+Click the **Insert table** icon and drag to select the number of rows and columns. For more options (merging cells, alignment) right-click inside any cell after the table is created.
+
+When pasting a table from Word or Excel with `Ctrl+V`, the system prompts you to clean up the formatting while preserving the table structure.
+
+### Inserting applications
+
+Click the blue **components** cube icon to open the application store. Search by name, click an app to read its description, and click **Insert into page** to embed it. Click inside an already-embedded app to edit its settings.
+
+---
+
+## Page properties
+
+### Navigation tab
+
+Controls how the page appears in menus, breadcrumb navigation, and the sitemap. The **Arrangement Order** field sets the page's position — lower numbers appear higher in the menu.
+
+### Access tab
+
+Restricts the page to specific user groups. If a group is selected, only logged-in visitors belonging to that group can view the page. You can also assign the page to a bulk-email group here.
+
+### Perex tab
+
+The Perex tab controls publication scheduling and metadata:
+
+| Field | Purpose |
+|---|---|
+| Start date | Date the page becomes active (used for news, events, and scheduled publishing) |
+| End date | Date the page is automatically hidden from the public |
+| Date of the event | Used for events and conferences in a calendar application |
+| Perex (Annotation) | Short description (~160 characters) shown in news and article listings |
+| Image | Preview image for listings |
+
+<Tip>
+  To schedule a page to go live at a future date, set the **Start date** and tick **Schedule a page change after this date**. The page is saved but not published until that moment.
+</Tip>
+
+To automatically take a page offline after a certain date, set the **End date** and tick **Publish a page after this date**. When that date is reached, the page is hidden from the public.
+
+### Template tab
+
+Shows the template, header, footer, and menu assigned to the page. These are normally set by the administrator via the folder's template settings and do not need to be changed during regular editing.
+
+---
+
+## Approval workflow
+
+When approval is configured for a folder, saving a page does not publish it immediately. Instead:
+
+1. The page is saved as a pending version.
+2. An email is sent to the designated approver(s) with a link to review the changes.
+3. The approver opens a side-by-side comparison of the current and proposed page, and either **approves** or **rejects** with a comment.
+4. You (the author) receive an email with the decision. If rejected, the comment explains what to change.
+
+Pages awaiting your approval appear in the **Pending approval** tab of the Web Pages section.
+
+<Note>
+  If you delete a page in a folder with approval enabled, the page continues to appear on the site until the deletion is approved.
+</Note>
+
+---
+
+## Redirects
+
+The **Redirects** section (accessible from the Web Pages menu) manages URL redirects.
+
+### Path redirects
+
+A redirect sends visitors from an old URL to a new one. Redirects are created automatically when you change a page's URL or move a folder.
+
+You can also add redirects manually — useful when migrating content from an old site. Each redirect has:
+
+- **Original path** — the old URL (supports regular expressions with the prefix `regexp:`)
+- **Target path** — the new URL
+- **Redirect code** — `301` (permanent) or `302` (temporary)
+- **Valid from / Valid to** — optional date range for time-limited redirects
+- **Note** — for your own reference
+
+### Domain redirects
+
+Use domain-level redirects to redirect an entire domain, for example from `domain.com` to `www.domain.com` or from `http` to `https`. Configure the original domain, target domain, protocol filter, and whether to include the original path and query parameters.
+
+---
+
+## Page history and versioning
+
+The **History** tab in the page editor shows all saved versions of the page, including:
+
+- Published versions (shown in bold for the currently live version)
+- Working (draft) versions not yet published
+- Versions scheduled for future publication, with the planned date shown in the **To be published** column
+
+### Actions on history entries
+
+| Action | What it does |
+|---|---|
+| Edit (pencil icon) | Loads the selected historical version into the editor so you can republish it |
+| Delete (trash icon) | Removes the version (only available for scheduled future versions) |
+| View (eye icon) | Opens a preview of the historical version in a new window |
+| Compare (split icon) | Opens a split-screen view comparing the historical version with the current published version, with an option to highlight differences |
+
+### Saving a working version
+
+Before clicking **Save**, tick **Save working version** to save your changes as a draft without publishing them. The page remains unchanged for visitors while you continue working. Working versions appear in the History tab and are deleted automatically when you next publish the page.
+
+<Tip>
+  Click **Preview** in the editor footer to open a live preview of your unsaved changes in a new browser tab. The preview updates automatically each time you save a working version.
+</Tip>
+
+---
+
+## Collaborating with other editors
+
+If another editor has the page open, WebJET warns you when you try to open it. Wait until that editor closes the page before making your own changes to avoid overwriting each other's work.

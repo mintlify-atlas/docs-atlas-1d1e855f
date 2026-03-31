@@ -1,0 +1,653 @@
+---
+title: 'REST controller'
+description: 'Implement a Spring REST back-end for a DataTables table by extending DatatableRestControllerV2. Covers endpoint conventions, lifecycle hooks, custom filtering, validation, and row reordering.'
+---
+
+`DatatableRestControllerV2<T, ID>` is the base class that exposes the complete set of endpoints consumed by the WebJET DataTables frontend. Extend it, supply a Spring Data repository, and you get `/all`, `/findByColumns`, `/editor`, `/action/*`, and `/row-reorder` for free.
+
+---
+
+## Minimal implementation
+
+```java
+package sk.iway.iwcm.components.redirects;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+import sk.iway.iwcm.system.datatable.Datatable;
+import sk.iway.iwcm.system.datatable.DatatableRestControllerV2;
+
+@RestController
+@Datatable
+@RequestMapping(value = "/admin/rest/settings/redirect")
+@PreAuthorize(value = "@WebjetSecurityService.hasPermission('cmp_redirects')")
+public class RedirectRestController extends DatatableRestControllerV2<RedirectBean, Long> {
+
+    @Autowired
+    public RedirectRestController(RedirectsRepository redirectsRepository) {
+        super(redirectsRepository, RedirectBean.class);
+    }
+}
+```
+
+Key points:
+
+- `@Datatable` — installs the correct error-message handler.
+- `@PreAuthorize` — enforces access at the Spring Security level.
+- The constructor receives the repository and the entity class used when creating a new record.
+
+<Warning>
+  The entity's primary key **must** be named `id` of type `Long`. If the database column has a different name, map it with `@Column(name = "...")`:
+
+  ```java
+  @Id
+  @GeneratedValue(strategy = GenerationType.IDENTITY)
+  @Column(name = "adminlog_notify_id")
+  @DataTableColumn(inputType = DataTableColumnType.ID)
+  private Long id;
+  ```
+
+  Also, **never use primitive types** (`int`, `long`) for entity fields. Use their object wrappers (`Integer`, `Long`) so that `ExampleMatcher` can use `NULL` instead of `0` in search conditions.
+</Warning>
+
+---
+
+## Endpoint conventions
+
+| Path suffix | HTTP method | Purpose |
+|---|---|---|
+| `/all` | `GET` | Load all records (or first page when `serverSide: true`) |
+| `/findByColumns` | `GET` | Server-side search, sort, and paging |
+| `/editor` | `POST` | Create, edit, duplicate, or delete records |
+| `/action/{action}` | `POST` | Execute a named server-side action |
+| `/row-reorder` | `POST` | Persist drag-and-drop row order |
+| `/sumAll` | `GET` | Sum all column values for the footer (`summary.mode = "all"`) |
+
+---
+
+## Comprehensive example
+
+```java
+package sk.iway.iwcm.components.gallery;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.validation.Errors;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+import sk.iway.iwcm.Identity;
+import sk.iway.iwcm.admin.upload.UploadService;
+import sk.iway.iwcm.common.ImageTools;
+import sk.iway.iwcm.i18n.Prop;
+import sk.iway.iwcm.system.datatable.Datatable;
+import sk.iway.iwcm.system.datatable.DatatableRestControllerV2;
+import sk.iway.iwcm.users.UsersDB;
+
+import jakarta.servlet.http.HttpServletRequest;
+
+@RestController
+@Datatable
+@RequestMapping(value = "/admin/rest/components/gallery")
+@PreAuthorize(value = "@WebjetSecurityService.hasPermission('menuGallery')")
+public class GalleryRestController extends DatatableRestControllerV2<GalleryEntity, Long> {
+
+    private final HttpServletRequest request;
+
+    @Autowired
+    public GalleryRestController(GalleryRepository galleryRepository, HttpServletRequest request) {
+        super(galleryRepository);
+        this.request = request;
+    }
+
+    @Override
+    public boolean checkAccessAllowed(HttpServletRequest request) {
+        Identity currentUser = UsersDB.getCurrentUser(request);
+        return currentUser.isEnabledItem("menuGallery");
+    }
+
+    @Override
+    public void validateEditor(HttpServletRequest request,
+                               DatatableRequest<Long, GalleryEntity> target,
+                               Identity user, Errors errors,
+                               Long id, GalleryEntity entity) {
+        if (!user.isFolderWritable(entity.getImagePath())) {
+            errors.rejectValue(
+                "errorField.imagePath", null,
+                Prop.getInstance(request).getText("user.rights.no_folder_rights")
+            );
+        }
+    }
+
+    @Override
+    public boolean processAction(GalleryEntity entity, String action) {
+        String imageUrl = entity.getImagePath() + "/" + entity.getImageName();
+        if ("rotate".equals(action)) {
+            return ImageTools.rotateImage(imageUrl, 90) == 0;
+        }
+        return false;
+    }
+
+    @Override
+    public boolean beforeDelete(GalleryEntity entity) {
+        UploadService uploadService = new UploadService(
+            entity.getImagePath() + "/" + entity.getImageName(), request
+        );
+        return uploadService.processDelete();
+    }
+}
+```
+
+---
+
+## Lifecycle hooks
+
+### `beforeSave` and `afterSave`
+
+Called before and after a record is inserted or updated. Use `beforeSave` to set derived values such as the save date or domain ID:
+
+```java
+@Override
+public void beforeSave(InsertScriptBean entity) {
+    entity.setSaveDate(new Date());
+
+    int domainId = CloudToolsForCore.getDomainId();
+    entity.setDomainId(domainId);
+    if (entity.getGroupIds() != null) {
+        for (InsertScriptGroupBean isg : entity.getGroupIds()) {
+            isg.setDomainId(domainId);
+        }
+    }
+}
+```
+
+`afterSave` receives both the original sent entity and the persisted version. For new records, `id` is only available in `saved`:
+
+```java
+@Override
+public void afterSave(UserDetailsEntity entity, UserDetails saved) {
+    Integer userId = saved.getId().intValue();
+    // ... additional post-save logic
+}
+```
+
+### `beforeDelete` and `afterDelete`
+
+```java
+@Override
+public boolean beforeDelete(GalleryEntity entity) {
+    UploadService uploadService = new UploadService(
+        entity.getImagePath() + "/" + entity.getImageName(), request
+    );
+    return uploadService.processDelete();
+}
+
+@Override
+public void afterDelete(UserGroupsEntity entity, long id) {
+    UserGroupsDB.getInstance(true); // refresh cache
+}
+```
+
+Prevent deletion by calling `throwError(...)` inside `beforeDelete`:
+
+```java
+@Override
+public boolean beforeDelete(ConfPreparedEntity entity) {
+    if (entity.getId() > 0
+            && entity.getDatePrepared() != null
+            && entity.getDatePrepared().getTime() > Tools.getNow()) {
+        return true; // allow
+    }
+    throwError("admin.cong_editor.youCanOnlyDeleteFutureRecords");
+    return false;
+}
+```
+
+### `beforeDuplicate` and `afterDuplicate`
+
+```java
+public void beforeDuplicate(T entity) {
+    // reset fields that must not be copied, e.g. default page reference
+}
+
+public void afterDuplicate(T entity, Long originalId) {
+    // copy related media, child records, etc.
+}
+```
+
+---
+
+## Overriding data access methods
+
+When you construct the class without a repository (pass `null`), or need custom queries, override these methods:
+
+```java
+@Override
+public Page<DomainRedirectBean> getAllItems(Pageable pageable) {
+    List<DomainRedirectBean> listedBeans = DomainRedirectDB.getAllRedirects();
+    return new DatatablePageImpl<>(listedBeans);
+}
+
+@Override
+public DomainRedirectBean insertItem(DomainRedirectBean entity) {
+    DomainRedirectDB.insert(entity);
+    return entity;
+}
+
+@Override
+public DomainRedirectBean editItem(DomainRedirectBean entity, long id) {
+    entity.setRedirectId((int) id);
+    return DomainRedirectDB.update(entity);
+}
+
+@Override
+public boolean deleteItem(DomainRedirectBean entity, long id) {
+    DomainRedirectDB.delete((int) id);
+    return true;
+}
+```
+
+<Warning>
+  Do not use `@Override` to override the raw REST endpoint methods. Always override the `xxxItem` helper methods instead.
+</Warning>
+
+---
+
+## `processFromEntity` and `processToEntity`
+
+Use these hooks to synchronise `editorFields` nested attributes with the entity:
+
+```java
+@Override
+public UserDetailsEntity processFromEntity(UserDetailsEntity entity, ProcessItemAction action) {
+    boolean loadSubQueries = ProcessItemAction.GETONE.equals(action);
+    if (ProcessItemAction.GETONE.equals(action) && entity == null) {
+        entity = new UserDetailsEntity();
+    }
+    if (entity != null && entity.getEditorFields() == null) {
+        UserDetailsEditorFields udef = new UserDetailsEditorFields();
+        udef.fromUserDetailsEntity(entity, loadSubQueries, getRequest());
+    }
+    return entity;
+}
+
+@Override
+public UserDetailsEntity processToEntity(UserDetailsEntity entity, ProcessItemAction action) {
+    if (entity != null) {
+        UserDetailsEditorFields udef = new UserDetailsEditorFields();
+        udef.toUserDetailsEntity(entity, getRequest());
+    }
+    return entity;
+}
+```
+
+When overriding `getAllItems` or `searchItem`, call `processFromEntity(Page<T>, ProcessItemAction)` on the returned page to ensure every element is processed.
+
+---
+
+## `processAction` for server-side actions
+
+Override `processAction` to handle named actions sent by `TABLE.executeAction(action)` on the client:
+
+```java
+@Override
+public boolean processAction(GalleryEntity entity, String action) {
+    String imageUrl = entity.getImagePath() + "/" + entity.getImageName();
+    if ("rotate".equals(action)) {
+        return ImageTools.rotateImage(imageUrl, 90) == 0;
+    }
+    return false;
+}
+```
+
+The frontend triggers actions via:
+
+```javascript
+galleryTable.executeAction("rotate");
+
+// With confirmation dialog
+cacheObjectsTable.executeAction(
+    "deletePictureCache",
+    true,
+    "[[#{components.data.deleting.imgcache.areYouSure}]]",
+    "[[#{components.data.deleting.imgcache.areYouSureNote}]]"
+);
+```
+
+---
+
+## Custom filtering (`addSpecSearch`)
+
+Override `addSpecSearch` to add JPA `Predicate` objects for complex search conditions. The repository must extend `JpaSpecificationExecutor<T>`:
+
+```java
+@Repository
+public interface RedirectsRepository
+        extends JpaRepository<RedirectBean, Long>,
+                JpaSpecificationExecutor<RedirectBean> {
+}
+```
+
+```java
+@Override
+@SuppressWarnings("unchecked")
+public void addSpecSearch(Map<String, String> params,
+                          List<Predicate> predicates,
+                          Root<AuditLogEntity> root,
+                          CriteriaBuilder builder) {
+
+    String searchUserFullName = params.get("searchUserFullName");
+    if (Tools.isNotEmpty(searchUserFullName)) {
+        List<Integer> userIds = (new SimpleQuery()).forListInteger(
+            "SELECT DISTINCT user_id FROM users WHERE first_name LIKE ? OR last_name LIKE ?",
+            "%" + searchUserFullName + "%",
+            "%" + searchUserFullName + "%"
+        );
+        if (userIds.size() > 0) predicates.add(root.get("userId").in(userIds));
+    }
+
+    String mode = getRequest().getParameter("mode");
+    if ("history".equals(mode)) predicates.add(builder.isNull(root.get("datePrepared")));
+    else                        predicates.add(builder.isNotNull(root.get("datePrepared")));
+}
+```
+
+<Note>
+  Always call `super.addSpecSearch(...)` at the end of your override so that the built-in status icon search and other framework conditions are applied.
+</Note>
+
+### `SpecSearch` helper methods
+
+`SpecSearch<T>` provides reusable search predicates:
+
+<AccordionGroup>
+  <Accordion title="Search by user full name">
+    ```java
+    SpecSearch<DocDetails> specSearch = new SpecSearch<>();
+    String searchAuthorName = params.get("searchAuthorName");
+    if (searchAuthorName != null) {
+        specSearch.addSpecSearchUserFullName(
+            searchAuthorName, "authorId", predicates, root, builder
+        );
+    }
+    super.addSpecSearch(params, predicates, root, builder);
+    ```
+  </Accordion>
+  <Accordion title="Search by comma-separated ID list (user groups)">
+    ```java
+    SpecSearch<UserDetailsEntity> specSearch = new SpecSearch<>();
+    String permissions = params.get("searchEditorFields.permisions");
+    if (permissions != null) {
+        specSearch.addSpecSearchPasswordProtected(
+            permissions, "userGroupsIds", predicates, root, builder
+        );
+    }
+    int userGroupId = Tools.getIntValue(params.get("userGroupId"), -1);
+    if (userGroupId > 0) {
+        specSearch.addSpecSearchPasswordProtected(
+            userGroupId, "userGroupsIds", predicates, root, builder
+        );
+    }
+    super.addSpecSearch(params, predicates, root, builder);
+    ```
+  </Accordion>
+  <Accordion title="Search by value in a foreign table">
+    ```java
+    @Override
+    public void addSpecSearch(Map<String, String> params,
+                              List<Predicate> predicates,
+                              Root<Media> root,
+                              CriteriaBuilder builder) {
+        super.addSpecSearch(params, predicates, root, builder);
+        String docTitle = params.get("searchEditorFields.docDetails");
+        if (Tools.isNotEmpty(docTitle)) {
+            SpecSearch<Media> specSearch = new SpecSearch<>();
+            specSearch.addSpecSearchIdInForeignTable(
+                docTitle, "documents", "doc_id", "title",
+                "mediaFkId", predicates, root, builder
+            );
+        }
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+### Filtering all records
+
+To filter even the "all records" call, use `getAllItemsIncludeSpecSearch`:
+
+```java
+@Override
+public Page<UserDetailsEntity> getAllItems(Pageable pageable) {
+    DatatablePageImpl<UserDetailsEntity> page =
+        new DatatablePageImpl<>(getAllItemsIncludeSpecSearch(new UserDetailsEntity(), pageable));
+
+    page.addOptions("editorFields.emails",
+        UserGroupsDB.getInstance().getUserGroupsByTypeId(UserGroupDetails.TYPE_EMAIL),
+        "userGroupName", "userGroupId", false);
+    page.addOptions("editorFields.permisions",
+        UserGroupsDB.getInstance().getUserGroupsByTypeId(UserGroupDetails.TYPE_PERMS),
+        "userGroupName", "userGroupId", false);
+
+    return page;
+}
+```
+
+---
+
+## Status icon search
+
+Status icon search is handled automatically by `DatatableRestControllerV2.addSpecSearchStatusIcons`, which is called from `addSpecSearch`. Supported `value` patterns in the status icon column options:
+
+| Pattern | SQL condition |
+|---|---|
+| `property:true` | `property = true` |
+| `property:false` | `property = false` |
+| `property:notEmpty` | `property IS NOT NULL AND property != ''` |
+| `property:empty` | `property IS NULL OR property = ''` |
+| `property:%text%` | `property LIKE '%text%'` |
+| `property:!%text%` | `property NOT LIKE '%text%'` |
+
+The repository must extend `JpaSpecificationExecutor` for status icon search to work.
+
+---
+
+## Dials for select boxes
+
+Use `DatatablePageImpl.addOptions(...)` to populate select field options server-side. Override `getOptions` (preferred) or `getAllItems`:
+
+```java
+@Override
+protected void getOptions(DatatablePageImpl<T> page) {
+    LayoutService ls = new LayoutService(getRequest());
+    page.addOptions("lng", ls.getLanguages(false, true), "label", "value", false);
+}
+
+// Alternative: override getAllItems
+@Override
+public Page<TranslationKeyEntity> getAllItems(Pageable pageable) {
+    DatatablePageImpl<TranslationKeyEntity> page =
+        new DatatablePageImpl<>(translationKeyService.getTranslationKeys(getRequest(), pageable));
+    LayoutService ls = new LayoutService(getRequest());
+    page.addOptions("lng", ls.getLanguages(false, true), "label", "value", false);
+    return page;
+}
+```
+
+When the third parameter of `addOptions` is `true`, the original Java bean is embedded in the JSON output under `original`, accessible in JavaScript as:
+
+```javascript
+for (let template of TABLE.DATA.json.options.tempId) {
+    if (template.original.tempId == this.json.tempId) {
+        // use template.original.*
+    }
+}
+```
+
+---
+
+## Validation
+
+Standard `jakarta.validation` annotations are evaluated automatically. For custom logic, implement `validateEditor`:
+
+```java
+@Override
+public void validateEditor(HttpServletRequest request,
+                            DatatableRequest<Long, GalleryEntity> target,
+                            Identity user, Errors errors,
+                            Long id, GalleryEntity entity) {
+    if (!user.isFolderWritable(entity.getImagePath())) {
+        errors.rejectValue(
+            "errorField.imagePath", null,
+            Prop.getInstance(request).getText("user.rights.no_folder_rights")
+        );
+        // Global (non-field) error:
+        // ((BindingResult) errors).addError(
+        //     new ObjectError("global", "datatable.error.fieldErrorMessage"));
+    }
+}
+```
+
+`target.getAction()` returns the action string (`"create"`, `"edit"`, `"remove"`, etc.), so you can apply validation selectively:
+
+```java
+if ("remove".equals(target.getAction())) {
+    // validate before delete
+}
+```
+
+For permission-based item-level access control, implement `checkItemPerms`:
+
+```java
+@Override
+public boolean checkItemPerms(MediaGroupBean entity, Long id) {
+    if (InitServlet.isTypeCloud() && entity.getId() != null && entity.getId() > 0) {
+        if (!GroupsDB.isGroupsEditable(getUser(), entity.getAvailableGroups())) return false;
+        MediaGroupBean old = getOneItem(entity.getId());
+        if (old != null && !GroupsDB.isGroupsEditable(getUser(), old.getAvailableGroups())) return false;
+    }
+    return true;
+}
+```
+
+To raise an error from inside `editItem` or similar methods:
+
+```java
+throwError("datatables.error.recordIsNotEditable");
+// or a list:
+throwError(List.of("error.key.one", "error.key.two"));
+```
+
+---
+
+## Redirection after saving
+
+Call `setRedirect(String url)` inside `afterSave` to redirect the user to another page after a successful save:
+
+```java
+@Override
+public void afterSave(FormsEntity entity, FormsEntity saved) {
+    if (entity.getFormSettings().getId() == null
+            || entity.getFormSettings().getId() == -1L) {
+        if ("multistep".equals(entity.getFormType())) {
+            setRedirect("/apps/form/admin/form-content/?formName="
+                + Tools.URLEncode(saved.getFormName()));
+        }
+    }
+}
+```
+
+---
+
+## Force datatable reload
+
+Call `setForceReload(true)` to instruct the frontend to reload all table data after saving — required when a record might have moved to a different directory or group:
+
+```java
+@Override
+public void afterSave(SomeEntity entity, SomeEntity saved) {
+    setForceReload(true);
+}
+```
+
+This triggers the `WJ.DTE.forceReload` event on the client so other UI components (e.g. a JS tree) can refresh:
+
+```javascript
+window.addEventListener('WJ.DTE.forceReload', (e) => {
+    $('#SomStromcek').jstree(true).refresh();
+}, false);
+```
+
+---
+
+## Row reorder endpoint
+
+Activate drag-and-drop row ordering by annotating the entity's sort priority field with `DataTableColumnType.ROW_REORDER`:
+
+```java
+@Column(name = "sort_priority")
+@DataTableColumn(
+    inputType = DataTableColumnType.ROW_REORDER,
+    title = "",
+    className = "icon-only",
+    filter = false
+)
+private Integer sortPriority;
+```
+
+`DatatableRestControllerV2` exposes the `/row-reorder` endpoint automatically. When a user drags a row to a new position, the endpoint updates all affected `sortPriority` values and persists them. A success notification is displayed on completion; an error notification is shown on failure.
+
+---
+
+## `DatatableRestControllerAvailableGroups`
+
+For applications where access rights follow the web-page folder structure (e.g. MultiWeb), extend `DatatableRestControllerAvailableGroups` instead. Specify the column names for the entity ID and the available-groups list:
+
+```java
+@RestController
+@Datatable
+@RequestMapping("/admin/rest/media-group")
+@PreAuthorize("@WebjetSecurityService.hasPermission('editor_edit_media_group')")
+public class MediaGroupRestController
+        extends DatatableRestControllerAvailableGroups<MediaGroupBean, Long> {
+
+    @Autowired
+    public MediaGroupRestController(MediaGroupRepository mediaGroupRepository) {
+        super(mediaGroupRepository, "id", "availableGroups");
+    }
+}
+```
+
+The base class overrides `checkItemPerms` to verify that the user can edit both the submitted entity and the original entity in the database, preventing privilege escalation by removing permissions and then editing a record.
+
+---
+
+## Custom sort order
+
+Override `addSpecSort` to modify the `Pageable` for complex or multi-column sorting:
+
+```java
+@Override
+public Pageable addSpecSort(Map<String, String> params, Pageable pageable) {
+    Sort modifiedSort = pageable.getSort();
+
+    String[] sortList = Tools.getTokens(params.get("sort"), "\n", true);
+    for (String sort : sortList) {
+        String[] data = Tools.getTokens(sort, ",", true);
+        if (data.length != 2) continue;
+        Direction direction = "asc".equals(data[1]) ? Direction.ASC : Direction.DESC;
+
+        if ("editorFields.firstName".equals(data[0])) {
+            modifiedSort = modifiedSort.and(Sort.by(direction, "contactFirstName", "deliveryName"));
+        } else if ("editorFields.lastName".equals(data[0])) {
+            modifiedSort = modifiedSort.and(Sort.by(direction, "contactLastName", "deliverySurName"));
+        }
+    }
+
+    Pageable modifiedPageable = PageRequest.of(
+        pageable.getPageNumber(), pageable.getPageSize(), modifiedSort
+    );
+    return super.addSpecSort(params, modifiedPageable);
+}
+```

@@ -1,0 +1,289 @@
+---
+title: "JPA and data access"
+description: "How WebJET CMS uses EclipseLink JPA, Spring Data repositories, MapStruct DTO mapping, entity inheritance, and the UpdateDatabase migration pattern."
+keywords: ["JPA", "EclipseLink", "Spring Data", "JpaRepository", "JpaSpecificationExecutor", "MapStruct", "entity", "repository", "Lombok", "DataTableColumn", "migration"]
+---
+
+WebJET CMS uses [EclipseLink JPA](https://www.eclipse.org/eclipselink/) as its JPA provider, fully integrated with Spring Data JPA. EclipseLink implements the JPA standard, so all standard annotations and Spring Data patterns apply.
+
+A solid starting point for the underlying standards:
+
+- [Baeldung: Defining JPA Entities](https://www.baeldung.com/jpa-entities)
+- [Introduction to Spring Data JPA](https://www.baeldung.com/the-persistence-layer-with-spring-data-jpa)
+- [Spring Data JPA — Query Creation](https://docs.spring.io/spring-data/jpa/docs/current/reference/html/#jpa.query-methods.query-creation)
+
+## Entity definition
+
+### Required conventions
+
+EclipseLink and Spring Data work together smoothly when you follow these rules:
+
+- **Attribute types must be object wrappers** — use `Integer`, `Long`, `Boolean`, not `int`, `long`, `boolean`. Primitive types cannot be set to `null`, which breaks "query by example" lookups in repositories.
+- **The primary key must be `Long`.**
+- **Use the `IDENTITY` strategy for auto-increment columns.** For Oracle, set the sequence name in the `generator` attribute.
+
+### Minimal entity example
+
+```java
+import jakarta.persistence.*;
+import lombok.Getter;
+import lombok.Setter;
+
+import sk.iway.iwcm.system.datatable.DataTableColumnType;
+import sk.iway.iwcm.system.datatable.annotations.DataTableColumn;
+
+@Entity
+@Table(name = "gallery")
+@Getter
+@Setter
+public class GalleryEntity {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY, generator = "S_gallery")
+    @DataTableColumn(inputType = DataTableColumnType.ID)
+    private Long id;
+
+    @DataTableColumn(inputType = DataTableColumnType.TEXT, title = "gallery.title")
+    private String title;
+
+    @DataTableColumn(inputType = DataTableColumnType.QUILL, title = "gallery.description")
+    @Convert(converter = sk.iway.iwcm.system.jpa.AllowSafeHtmlAttributeConverter.class)
+    private String description;
+}
+```
+
+`@Getter` and `@Setter` are provided by [Project Lombok](https://projectlombok.org) and generate all accessor methods at compile time. `@DataTableColumn` controls how the field is rendered in the DataTable UI.
+
+<Note>
+  Avoid the older `@GeneratedValue` / `@TableGenerator` pattern using `PkeyGenerator`. It is deprecated since WebJET 2021. Use `GenerationType.IDENTITY` instead.
+</Note>
+
+An annotated reference entity is [`AuditNotifyEntity`](https://github.com/webjetcms/webjetcms/blob/main/src/main/java/sk/iway/iwcm/system/audit/AuditNotifyEntity.java).
+
+## Entity inheritance
+
+When two tables share a large set of identical columns (for example `documents` and `documents_history`), extract the shared columns into a `@MappedSuperclass`. This avoids duplicating field declarations while keeping each table as an independent entity.
+
+```java
+import jakarta.persistence.MappedSuperclass;
+import java.io.Serializable;
+
+@MappedSuperclass
+public class DocBasic implements DocGroupInterface, Serializable {
+
+    // Shared columns declared here — no @Getter/@Setter on this class
+    private String title;
+    private String virtualPath;
+    // ...
+
+    // All getters and setters written manually
+    public String getTitle() { return title; }
+    public void setTitle(String title) { this.title = title; }
+}
+```
+
+```java
+@Entity
+@Table(name = "documents")
+@Getter
+@Setter
+public class DocDetails extends DocBasic {
+    // Additional document-specific columns here
+}
+```
+
+<Warning>
+  Do **not** use Lombok `@Getter` / `@Setter` on the `@MappedSuperclass` parent class. JPA's reflection-based method inheritance does not work with Lombok-generated methods in superclasses and will throw `NoSuchMethodError` at runtime. Write all getters and setters by hand in the parent class.
+</Warning>
+
+Child classes that extend the superclass require no extra annotations beyond `@Entity` and `@Table`. Methods from the parent can be overridden normally.
+
+## Spring Data repositories
+
+Declare a repository interface extending `JpaRepository` and, if you need DataTable filtering, `JpaSpecificationExecutor`:
+
+```java
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.stereotype.Repository;
+
+@Repository
+public interface GalleryRepository extends JpaRepository<GalleryEntity, Long>,
+        JpaSpecificationExecutor<GalleryEntity> {
+
+    // Spring Data generates the SQL from the method name
+    List<GalleryEntity> findByGroupId(Long groupId);
+    List<GalleryEntity> findByTitleContainingIgnoreCase(String title);
+}
+```
+
+`JpaSpecificationExecutor` enables the `DatatableRestControllerV2` to build dynamic filter queries from the DataTable column search inputs without any additional code.
+
+### Custom bulk update query
+
+For update or delete operations that affect multiple rows, annotate the repository method with `@Transactional` and `@Modifying`:
+
+```java
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+
+@Repository
+public interface DocHistoryRepository extends JpaRepository<DocHistory, Long>,
+        JpaSpecificationExecutor<DocHistory> {
+
+    @Transactional
+    @Modifying
+    @Query("UPDATE DocHistory SET actual = :actual, awaitingApprove = :awaitingApprove, "
+         + "syncStatus = 1 WHERE id IN :historyIds")
+    void updateActualHistory(
+        @Param("actual") boolean actual,
+        @Param("awaitingApprove") String awaitingApprove,
+        @Param("historyIds") List<Integer> historyIds
+    );
+}
+```
+
+A concrete example with several derived query methods is [`FormsRepository`](https://github.com/webjetcms/webjetcms/blob/main/src/main/java/sk/iway/iwcm/components/forms/FormsRepository.java).
+
+## MapStruct DTO mapping
+
+Use [MapStruct](https://mapstruct.org) to convert JPA entities to lightweight DTO objects for REST responses or history views. The mapper interface is implemented automatically at compile time.
+
+### Gradle setup
+
+```groovy
+ext {
+    webjetVersion = "8.8-SNAPSHOT"
+    mapstructVersion = "1.4.2.Final"
+}
+
+dependencies {
+    implementation "org.mapstruct:mapstruct:${mapstructVersion}"
+    annotationProcessor "org.mapstruct:mapstruct-processor:${mapstructVersion}"
+}
+```
+
+### DTO class
+
+```java
+package sk.iway.iwcm.editor.rest;
+
+import lombok.Getter;
+import lombok.Setter;
+import sk.iway.iwcm.system.datatable.DataTableColumnType;
+import sk.iway.iwcm.system.datatable.annotations.DataTableColumn;
+
+@Getter
+@Setter
+public class DocHistoryDto {
+
+    @DataTableColumn(inputType = DataTableColumnType.ID)
+    private Long id;
+
+    @DataTableColumn(inputType = DataTableColumnType.TEXT_NUMBER, title = "components.forum.docid")
+    private int docId;
+
+    @DataTableColumn(inputType = DataTableColumnType.DATETIME, title = "history.date")
+    private Long historySaveDate;
+
+    @DataTableColumn(inputType = DataTableColumnType.TEXT, title = "history.changedBy")
+    private String authorName;
+}
+```
+
+### Mapper interface
+
+<Warning>
+  The mapper interface class name **must contain the word `Mapper`** (e.g. `DocHistoryDtoMapper`) for the Jenkins build to detect and compile it correctly.
+</Warning>
+
+```java
+package sk.iway.iwcm.editor.rest;
+
+import java.util.List;
+
+import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
+import org.mapstruct.Named;
+import org.mapstruct.ReportingPolicy;
+import org.mapstruct.factory.Mappers;
+
+import sk.iway.iwcm.DB;
+import sk.iway.iwcm.Logger;
+import sk.iway.iwcm.doc.DocDetails;
+
+@Mapper(unmappedTargetPolicy = ReportingPolicy.IGNORE)
+public interface DocHistoryDtoMapper {
+
+    DocHistoryDtoMapper INSTANCE = Mappers.getMapper(DocHistoryDtoMapper.class);
+
+    @Mapping(source = "historySaveDate", target = "historySaveDate", qualifiedByName = "stringDateToLong")
+    @Mapping(source = "historyId", target = "id")
+    DocHistoryDto docToHistoryDto(DocDetails doc);
+
+    List<DocHistoryDto> toHistoryDtos(List<DocDetails> docs);
+
+    @Named("stringDateToLong")
+    default Long stringDateToLong(String date) {
+        long timestamp = DB.getTimestamp(date);
+        Logger.debug(DocHistoryDtoMapper.class, "stringDateToLong, date=" + date + " timestamp=" + timestamp);
+        return Long.valueOf(timestamp);
+    }
+}
+```
+
+Key points:
+
+- Fields with matching names are mapped automatically — no `@Mapping` needed.
+- Use `@Mapping(source = "...", target = "...")` when source and target field names differ.
+- Use `qualifiedByName` to reference a custom conversion method for type transformations.
+- `@Mapper(unmappedTargetPolicy = ReportingPolicy.IGNORE)` suppresses warnings for fields that exist in the target but not in the source.
+- Always declare a static `INSTANCE` field so the mapper can be used without Spring injection.
+
+### Using the mapper
+
+```java
+// Original list of DocDetails objects from the database
+List<DocDetails> list = historyDB.getHistory(docId, false, false);
+
+// Map to DTO objects for the REST response
+List<DocHistoryDto> dtoList = DocHistoryDtoMapper.INSTANCE.toHistoryDtos(list);
+```
+
+Full MapStruct mapping options are documented at [mapstruct.org](https://mapstruct.org/documentation/stable/reference/html/#defining-mapper).
+
+## Transaction management
+
+Use Spring's `@Transactional` annotation on service methods that span multiple repository operations. For repository methods that modify data without returning results, also add `@Modifying` (as shown in the custom query example above).
+
+<Tip>
+  `DatatableRestControllerV2` manages transactions for standard CRUD operations automatically. You only need explicit `@Transactional` annotations in custom service or repository methods.
+</Tip>
+
+## Database compatibility
+
+WebJET CMS supports the following databases. EclipseLink's dialect abstraction handles the differences transparently in most cases:
+
+<CardGroup cols={2}>
+  <Card title="MySQL / MariaDB" icon="database">
+    Primary development and CI target. Most examples and default configurations reference MySQL syntax.
+  </Card>
+  <Card title="PostgreSQL" icon="database">
+    Fully supported. Use `GenerationType.IDENTITY` for sequences — PostgreSQL uses `SERIAL` / `GENERATED AS IDENTITY` natively.
+  </Card>
+  <Card title="Microsoft SQL Server" icon="database">
+    Supported via the MSSQL EclipseLink platform. `IDENTITY` columns map to SQL Server's `IDENTITY(1,1)`.
+  </Card>
+  <Card title="Oracle" icon="database">
+    Supported. Sequences are required for auto-increment columns — set the sequence name in `@GeneratedValue(generator = "S_table_name")`.
+  </Card>
+</CardGroup>
+
+<Note>
+  Always use `Integer` / `Long` (object wrappers) rather than `int` / `long` for entity fields. This ensures correct NULL handling across all supported databases when using Spring Data query-by-example.
+</Note>

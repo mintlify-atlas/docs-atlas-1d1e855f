@@ -1,0 +1,328 @@
+---
+title: 'Configuration'
+description: 'Configure WebJET CMS: database connection, SMTP, logging, clustering, and external configuration via JVM properties or environment variables.'
+keywords: ['configuration', 'database', 'smtp', 'poolman', 'jvm', 'environment variables', 'cluster', 'logging', 'webjet']
+---
+
+WebJET CMS is configured primarily through the admin panel at **Settings → Configuration**. Some settings — such as database credentials or cluster node identity — must be set before the application starts. This page covers the key configuration areas.
+
+## Database connection (poolman.xml)
+
+The database connection is defined in `WEB-INF/classes/poolman.xml` (or `src/main/resources/poolman.xml` in a Gradle project). The connection named `iwcm` is used by WebJET for its own tables.
+
+<CodeGroup>
+
+```xml MariaDB / MySQL
+<?xml version="1.0" encoding="UTF-8"?>
+<poolman>
+    <datasource>
+        <dbname>iwcm</dbname>
+        <driver>org.mariadb.jdbc.Driver</driver>
+        <url>jdbc:mariadb://db-server/schema-name</url>
+        <username>db-user</username>
+        <password>db-password</password>
+        <minimumSize>0</minimumSize>
+        <maximumSize>50</maximumSize>
+    </datasource>
+</poolman>
+```
+
+```xml PostgreSQL
+<?xml version="1.0" encoding="UTF-8"?>
+<poolman>
+    <datasource>
+        <dbname>iwcm</dbname>
+        <driver>org.postgresql.Driver</driver>
+        <url>jdbc:postgresql://db-server/db-name?currentSchema=webjet_cms</url>
+        <username>db-user</username>
+        <password>db-password</password>
+    </datasource>
+</poolman>
+```
+
+```xml Microsoft SQL
+<?xml version="1.0" encoding="UTF-8"?>
+<poolman>
+    <datasource>
+        <dbname>iwcm</dbname>
+        <driver>net.sourceforge.jtds.jdbc.Driver</driver>
+        <url>jdbc:jtds:sqlserver://db-server:1433/schema-name;encoding=utf-8</url>
+        <username>db-user</username>
+        <password>db-password</password>
+    </datasource>
+</poolman>
+```
+
+```xml Oracle
+<?xml version="1.0" encoding="UTF-8"?>
+<poolman>
+    <datasource>
+        <dbname>iwcm</dbname>
+        <driver>oracle.jdbc.OracleDriver</driver>
+        <url>jdbc:oracle:thin:@db-server:1521/instance-name</url>
+        <username>db-user</username>
+        <password>db-password</password>
+    </datasource>
+</poolman>
+```
+
+</CodeGroup>
+
+### Connection pool options
+
+| Element | Default | Description |
+|---------|---------|-------------|
+| `minimumSize` | 0 | Minimum number of always-open connections |
+| `maximumSize` | 50 | Maximum number of open connections |
+| `autoCommit` | `false` | Set `true` to enable auto-commit on every statement |
+| `readOnly` | `false` | Set `true` for read-only connections |
+| `connectionTimeout` | 300 | Seconds before a connection is considered leaked |
+| `testQuery` | — | SQL to test connection health. Set to `true` for `SELECT 1` |
+| `hikariProperties` | — | Additional [HikariCP](https://github.com/brettwooldridge/HikariCP) properties in `key=value` format |
+
+Example with extended pool settings:
+
+```xml
+<datasource>
+    <dbname>iwcm</dbname>
+    <driver>org.mariadb.jdbc.Driver</driver>
+    <url>jdbc:mariadb://db-server/schema-name</url>
+    <username>db-user</username>
+    <password>db-password</password>
+    <minimumSize>0</minimumSize>
+    <maximumSize>60</maximumSize>
+    <hikariProperties>
+        maxLifetime=600000
+        connectionTestQuery=SELECT 1
+    </hikariProperties>
+</datasource>
+```
+
+## SMTP email settings
+
+Set these configuration variables in **Settings → Configuration** to enable outgoing email:
+
+| Variable | Description |
+|----------|-------------|
+| `smtpServer` | SMTP server hostname |
+| `smtpPort` | SMTP port (e.g. `587` for TLS) |
+| `smtpUser` | SMTP login name |
+| `smtpPassword` | SMTP password |
+| `smtpUseSSL` | Set to `true` to enable SSL |
+| `smtpUseTLS` | Set to `true` to enable TLS (required for port 587) |
+| `smtpTLSVersion` | TLS version for the SMTP connection |
+| `smtpAuthMechanism` | Auth mechanism (e.g. `NTLM`, `XOAUTH2`). Leave empty for the JavaMail default |
+| `emailProtectionSenderEmail` | Sender address used in `FROM` for all emails when the SMTP server is not open relay (e.g. `noreply@example.com`). The original `FROM` value is moved to `REPLY-TO` |
+| `defaultSenderName` | Display name for the sender |
+| `defaultSenderEmail` | Default sender address |
+| `useSMTPServer` | Set to `false` to disable email sending (useful on cluster nodes without SMTP access) |
+| `smtpConnectionTimeoutMillis` | Milliseconds to wait for SMTP connection |
+
+### Amazon SES via SMTP
+
+```properties
+smtpServer=email-smtp.eu-west-1.amazonaws.com
+smtpPort=587
+smtpUser=<SES SMTP username>
+smtpPassword=<SES SMTP password>
+smtpUseTLS=true
+```
+
+<Tip>
+  After setting up SES, verify in email headers that messages are actually sent via Amazon SES. Also verify the domain identity and set DKIM keys in the SES console.
+</Tip>
+
+### Per-module sender addresses
+
+You can override `defaultSenderEmail` for individual modules by using a prefix. For example, `reservationDefaultSenderEmail` overrides the sender address for booking confirmations. Available prefixes:
+
+- `dmail` — bulk email
+- `formmail` — form submission notifications
+- `reservation` — booking approvals/denials
+- `passwordReset` — password reset emails
+
+## Logging
+
+WebJET CMS uses [Logback](http://logback.qos.ch/) for logging. The configuration file is at `WEB-INF/classes/logback.xml`.
+
+For quick adjustments without editing the XML file, use these configuration variables:
+
+| Variable | Description |
+|----------|-------------|
+| `logLevel` | Base log level: `debug` for detailed output, `normal` for production |
+| `logLevels` | Per-package log levels, one per line, in `package=LEVEL` format |
+
+Example `logLevels` value:
+
+```
+sk.iway=DEBUG
+sk.iway.iwcm=WARN
+org.springframework=WARN
+```
+
+A minimal `logback.xml` for a new project:
+
+```xml
+<configuration>
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>[%X{installName}][%c{1}][%p][%X{userId}] %d{yyyy-MM-dd HH:mm:ss} - %msg%n</pattern>
+        </encoder>
+    </appender>
+    <appender name="IN_MEMORY" class="sk.iway.iwcm.system.logging.InMemoryLoggerAppender" />
+    <root level="ERROR">
+        <appender-ref ref="STDOUT" />
+        <appender-ref ref="IN_MEMORY" />
+    </root>
+    <logger level="INFO" name="sk.iway"/>
+</configuration>
+```
+
+## Cluster configuration
+
+When running multiple WebJET nodes, the cluster must be configured so nodes can synchronize their in-memory caches.
+
+### Auto mode
+
+The simplest setup. Set `clusterNames` to `auto` and restart:
+
+```properties
+clusterNames=auto
+```
+
+WebJET uses the server's `HOSTNAME` environment variable (or the host's resolved name/IP) as the node name, truncated to 16 characters.
+
+<Tip>
+  If your infrastructure (e.g. Kubernetes) appends a random suffix to hostnames, set `clusterHostnameTrimFromEnd=true` to use the last 16 characters instead.
+</Tip>
+
+### Explicit node list
+
+For a stable, known set of nodes:
+
+```properties
+clusterNames=node1,node2,node3
+```
+
+Set each node's ID via a JVM parameter (see [external configuration](#external-configuration)):
+
+```sh
+JAVA_OPTS="$JAVA_OPTS -DwebjetNodeId=1"
+```
+
+### Cluster variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `clusterRefreshTimeout` | 5000 ms | Cache sync interval. Use 60000 ms (1 min) in production to reduce load |
+| `clusterMyNodeType` | `full` | `full` = admin + public, `public` = public only |
+| `senderRunOnNode` | — | Comma-separated list of nodes that trigger bulk email sending |
+
+## External configuration
+
+You can override any configuration variable without touching the admin panel, using JVM system properties or OS environment variables. This is especially useful for:
+
+- Different settings per environment (dev, staging, production)
+- Keeping secrets out of the database
+- Per-node cluster configuration
+
+### JVM system properties (`-D` flags)
+
+Prefix the variable name with `webjet.` and set it via `JAVA_OPTS`:
+
+```sh
+# Linux: /etc/default/tomcat or /etc/conf.d/tomcat
+JAVA_OPTS="$JAVA_OPTS -Dwebjet.smtpServer=mail.example.com"
+JAVA_OPTS="$JAVA_OPTS -Dwebjet.logLevel=debug"
+JAVA_OPTS="$JAVA_OPTS -DwebjetNodeId=2"
+```
+
+On Windows, add these lines to the **Java Options** text area in the **Configure Tomcat** application.
+
+<Note>
+  `webjetNodeId` does not use the `webjet.` prefix. Setting it configures `clusterMyNodeName` to `nodeX` and `pkeyGenOffset` to `X`.
+</Note>
+
+### Environment variables
+
+Use a `webjet_` prefix (underscore instead of period, since `.` is not valid in env var names):
+
+```sh
+export webjet_smtpServer=mail.example.com
+export webjet_logLevel=debug
+export webjetNodeId=2
+```
+
+<Tip>
+  Environment variables are recommended for containerized deployments because they can be injected by the container runtime.
+</Tip>
+
+### Tomcat context parameters
+
+Set variables per virtual host in `server.xml`:
+
+```xml
+<Host name="mysite.example.com" appBase="webapps" unpackWARs="false" autoDeploy="false">
+    <Context path="" docBase="../webapps/webjet" reloadable="false" swallowOutput="true">
+        <Resources allowLinking="true" />
+        <Parameter name="webjet_logLevel" value="normal" override="true"/>
+    </Context>
+</Host>
+```
+
+### Setting an empty value
+
+To explicitly clear a variable (override a non-empty database value with an empty string), set the value to `-`:
+
+```sh
+JAVA_OPTS="$JAVA_OPTS -Dwebjet.smtpServer=-"
+```
+
+### External database credentials
+
+Database connection parameters can also come from system or environment variables, so you don't have to store passwords in `poolman.xml`:
+
+```xml
+<!-- poolman.xml with empty values -->
+<poolman>
+    <datasource>
+        <dbname>iwcm</dbname>
+        <driver></driver>
+        <url></url>
+        <username></username>
+        <password></password>
+    </datasource>
+</poolman>
+```
+
+Then set the values externally:
+
+| Variable | Description |
+|----------|-------------|
+| `webjetDbDriver` | JDBC driver class |
+| `webjetDbUrl` | JDBC connection URL |
+| `webjetDbUserName` | Database username |
+| `webjetDbPassword` | Database password |
+| `webjetDbMinimumSize` | Minimum pool size |
+| `webjetDbMaximumSize` | Maximum pool size |
+
+To use a completely different `poolman.xml` file (for example on a staging environment), set:
+
+```sh
+JAVA_OPTS="$JAVA_OPTS -DwebjetPoolmanPath=/poolman-staging.xml"
+```
+
+WebJET looks for the file first as an absolute path on disk, then relative to `WEB-INF/classes/`.
+
+## Key admin panel variables
+
+The following variables are configured in **Settings → Configuration** in the admin panel:
+
+| Variable | Description |
+|----------|-------------|
+| `serverBeyoundProxy` | Set to `true` when WebJET runs behind a reverse proxy or load balancer. WebJET reads visitor IP from `x-forwarded-for` and protocol from `x-forwarded-proto` |
+| `webEnabledIPs` | Comma-separated list of IP prefixes allowed to access the public site |
+| `adminEnabledIPs` | Comma-separated list of IP prefixes allowed to access the admin panel |
+| `cloudStaticFilesDir` | Path to the external static files directory |
+| `enableStaticFilesExternalDir` | Enable or disable the external static files directory |
+| `amchartLicense` | License key for [amCharts](https://www.amcharts.com) charts (removes the amCharts logo) |

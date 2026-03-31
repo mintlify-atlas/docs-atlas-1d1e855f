@@ -1,0 +1,219 @@
+---
+title: 'User management'
+description: 'How to create and manage user accounts, configure user groups and rights groups, assign permissions, import users from Excel, and manage password policies and active sessions.'
+keywords: ['webjet', 'users', 'user groups', 'permissions', 'rights', 'password', 'GDPR', 'sessions', 'import', 'excel']
+---
+
+The Users section lets you manage administrator accounts and registered website users. It is divided into three areas: the **list of users**, **user groups**, and **rights groups (permission groups)**.
+
+Access to the user list requires one of two rights:
+- `správa administrátorov` — to manage administrator accounts.
+- `správa registrovaných používateľov` — to manage registered users and bulk email subscribers.
+
+---
+
+## List of users
+
+The user list table shows all users you have permission to manage. When filtering, the **Access rights to non-public sections** and **Bulk e-mail login** columns search by the name of the specified group. Using the **Equal** filter option matches users who have exactly that one group assigned.
+
+Each user record is divided into tabs: **Personal data**, **Contact details**, **Optional fields**, **Groups**, **Rights**, and **Approval**.
+
+### Personal data tab
+
+Contains basic user information in two parts:
+
+**Personal data** — fields such as Title, First Name, Last Name, Date of Birth. Required fields:
+- First name
+- Last name
+
+**Access** — account credentials and validity settings. Required fields:
+- Login name (must be unique)
+- Email address
+- Password
+
+<AccordionGroup>
+  <Accordion title="Password options">
+    The password field includes a quality check. To skip the check and allow a weaker password, select **Enable weak password** before saving.
+
+    Entering `*` or `random` in the password field generates a random password when the record is saved.
+
+    For a user to log in, the **Approved User** option must be selected on this tab.
+  </Accordion>
+  <Accordion title="Account validity dates">
+    You can set a **Start Date** and **End Date** to limit the period during which a user can log in. Outside these dates, the account is inactive even if the user knows the correct credentials.
+  </Accordion>
+</AccordionGroup>
+
+### Contact details tab
+
+Contains address and delivery information (address, city, phone number, delivery address). No mandatory fields. The delivery address is typically used for e-commerce applications.
+
+### Optional fields tab
+
+Contains freely configurable fields. See the optional fields documentation for how to configure them.
+
+### Groups tab
+
+Assigns the user to user groups. The tab has two parts:
+
+- **User groups** — selecting a group grants the user access rights to non-public sections of the website.
+- **Bulk email** — selecting a group subscribes the user to a bulk email distribution list.
+
+An option to **Send emails about being added to user groups** is also available on this tab.
+
+<Warning>
+Emails are only sent if the user group has a **Page ID with the text of the email** configured.
+</Warning>
+
+### Rights tab
+
+Controls access to the administration section and specific rights within it.
+
+<Info>
+The Rights tab is only visible to users who already have administrative rights. It is hidden for users without admin access, and can only be edited by an administrator.
+</Info>
+
+Selecting the option to allow access to the admin section reveals four sub-sections:
+
+<AccordionGroup>
+  <Accordion title="Rights to directories and pages">
+    Restricts the user's editing ability to specific website directories or individual web pages. Click an **Add** button to open the web page tree and select a directory or page.
+
+    By default, an administrator with **no directory or page right selected automatically gets rights to all directories and web pages**.
+
+    In a multi-domain installation, folders from all domains are shown (prefixed with the domain name) so you can distinguish between same-named folders across domains.
+  </Accordion>
+  <Accordion title="Uploading files to directories">
+    Restricts which file system directories the user can upload files to. Click **Add** to select a directory from the file system tree.
+
+    By default, a user with no directories selected can upload to any directory. Set the configuration variable `defaultDisableUpload` to `true` to reverse this — users with no directories selected will then be unable to upload files at all.
+
+    Setting `userPermsActualPageAutomatic` to `true` automatically grants upload rights to `/images` and `/files` sub-folders corresponding to the web page directories the user has access to.
+  </Accordion>
+  <Accordion title="Rights groups">
+    Displays available rights groups. Each group is indicated by a coloured circle with the first letter of its name. Selecting a group highlights the individual rights it contains, making it easy to see what access is included.
+
+    When a user logs in, they receive all rights from their assigned rights groups plus any additional individual rights set directly on their account.
+  </Accordion>
+  <Accordion title="Access rights">
+    A tree structure of all individual rights. Terminal nodes represent specific rights; parent nodes are organisational groupings only.
+
+    - Click a parent node checkbox to select or deselect all children at once.
+    - Use the search box under the **Access Rights** heading to filter the tree by right name.
+    - Use the **select all** / **deselect all** icons to check or uncheck everything at once.
+  </Accordion>
+</AccordionGroup>
+
+### Approval tab
+
+Defines approval actions triggered when changes are made in specific web page directories. This tab only appears after the user record has been saved for the first time.
+
+For each entry, you select a **Directory** and an **Action**:
+
+| Action | Description |
+|--------|-------------|
+| Approve | Changes in the selected directory require approval by this user. |
+| Notification | This user receives an email notification when changes occur. |
+| None | No action; changes by this user in the directory are automatically approved. |
+| Approval – second level | Used for multi-level approval workflows. |
+
+---
+
+## User groups
+
+User groups categorise visitors, registered users, and bulk email subscribers.
+
+There are two types of groups:
+- **Access to password-protected sections** — controls access to non-public parts of the website.
+- **Bulk email subscription** — controls which distribution lists a user belongs to.
+
+### Quick actions on the groups table
+
+| Button | Action |
+|--------|--------|
+| Add the selected group to all users | Adds the selected group to every existing user. |
+| Remove the selected group from all users | Removes the selected group from every existing user. |
+| Delete all users of the selected group | Deletes all users who belong to at least one of the selected groups. |
+
+### Group editor options
+
+<AccordionGroup>
+  <Accordion title="Name">
+    The unique name of the user group.
+  </Accordion>
+  <Accordion title="Type of group">
+    Either an access rights group or a bulk email group.
+  </Accordion>
+  <Accordion title="Requires approval">
+    If checked, new registrations to this group are held pending administrator approval. The user is created in the database but cannot log in until approved.
+  </Accordion>
+  <Accordion title="Allow adding/removing from a group by the user themselves">
+    When enabled, users can self-manage their membership. Typically used for email subscription groups. Leave unchecked for access rights groups.
+  </Accordion>
+  <Accordion title="Require email address confirmation">
+    If selected, a confirmation link is emailed to the user when they register. The user is only added to the group after clicking the link.
+  </Accordion>
+  <Accordion title="Page ID with the text of the email">
+    Selects the page whose content is used as the body of the email sent to the user after approval.
+  </Accordion>
+  <Accordion title="Price discount in %">
+    A percentage discount applied to users in this group, used by applications such as Reservations.
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Rights groups (permission groups)
+
+Rights groups let you define reusable sets of permissions. Instead of configuring individual rights for every user, you create groups such as "Editor" or "Marketing" and assign users to those groups.
+
+You can create, edit, duplicate, or delete rights groups, and export or import them via Excel using the buttons at the top-left of the page.
+
+When creating or duplicating a rights group, the only mandatory field is **Group name**. The key configuration is on the **Access Rights** tab, where you select which applications and modules the group covers.
+
+<Tip>
+Define rights groups for your typical roles (Editor, Marketing, Administrator) and assign users to groups rather than configuring individual rights. This makes permission management much easier to maintain.
+</Tip>
+
+---
+
+## Password policy and reset
+
+### Password quality
+
+The login form and the user editor both include a password quality indicator. Passwords must meet a minimum quality threshold (level 4) unless **Enable weak password** is explicitly selected when saving the user. Passwords that no longer meet the current requirements will prompt the user to change them on next login.
+
+### Password reset
+
+Users can request a password reset from the login page by clicking **Forgotten password** and entering their email address or login name. An email is sent with a reset link that is valid for 30 minutes.
+
+<Warning>
+If multiple accounts share the same email address, the reset link applies to the most recent account. The user must select their login name on the reset form — the password is only changed for the chosen account.
+</Warning>
+
+The sender name and email address for password reset emails can be configured via:
+- `passwordResetDefaultSenderEmail`
+- `passwordResetDefaultSenderName`
+
+---
+
+## Active login sessions
+
+The **My active logins** panel on the home screen shows all active sessions for your user account. You can terminate any session by clicking the logout icon next to it. Sessions within the current cluster node are terminated immediately; sessions on other nodes are terminated after the next synchronisation (typically within a minute).
+
+<Note>
+Session data is refreshed when you log in. For more frequent updates, configure a background task for `sk.iway.iwcm.stat.SessionClusterService` in the Automated Tasks section. The task purges database records older than 60 minutes; without it, records are purged after 24 hours on the next login.
+</Note>
+
+If you have the **Home - view logged in administrators** right, you can also see all currently logged-in administrators and send them an email from the dashboard.
+
+---
+
+## GDPR considerations
+
+User records in WebJET contain personal data (name, email, date of birth, address). When managing users, keep the following in mind:
+
+- The **Contact details** tab collects personal information including address, phone number, and delivery details. Only collect data that is necessary for your use case.
+- User group membership and access rights are also stored per user. Ensure that users are removed from groups when their access is no longer required.
+- The approval workflow (on the Approval tab) can be used to ensure that only authorised individuals process data-related changes in specific directories.
+- When a user is deleted from the system, all personal data stored in their record is removed. The **Delete all users of the selected group** quick action permanently deletes all matching user records.

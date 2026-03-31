@@ -1,0 +1,181 @@
+---
+title: 'E-commerce (Eshop)'
+description: 'Manage your online store in WebJET CMS — products, categories, orders, delivery methods, and payment methods.'
+keywords: ['eshop', 'e-commerce', 'products', 'orders', 'delivery', 'payment', 'online shop', 'basket']
+---
+
+The WebJET e-commerce module lets you manage an online store directly from the CMS administration. It covers product catalog management, order processing, delivery and payment configuration, and customer communication.
+
+<CardGroup cols={2}>
+  <Card title="Product list" icon="box">
+    Manage product categories and individual products.
+  </Card>
+  <Card title="Orders" icon="receipt">
+    View, edit, and track the status of customer orders.
+  </Card>
+  <Card title="Delivery methods" icon="truck">
+    Configure delivery options and pricing per country.
+  </Card>
+  <Card title="Payment methods" icon="credit-card">
+    Set up and configure available payment gateways.
+  </Card>
+</CardGroup>
+
+---
+
+## Product catalog
+
+The **Product List** application provides an overview and management of all products. Products are organized into **categories**, which are represented by folders in a tree structure.
+
+### Filtering by category
+
+At the top of the product list there is a category selector. Selecting a category filters the table to show products from that category and all its subcategories.
+
+### Adding a product category
+
+<Steps>
+  <Step title="Select the parent category">
+    In the category selector, choose the folder under which the new category will be created.
+  </Step>
+  <Step title="Click the add folder button">
+    Click the folder add icon in the toolbar.
+  </Step>
+  <Step title="Enter the category name">
+    Type a name for the new category. The name must be unique within the selected parent folder. Confirm to create it.
+  </Step>
+</Steps>
+
+<Note>
+If you leave the category name blank or enter a name that already exists in the same folder, the creation will fail with an error message.
+</Note>
+
+### Adding and editing products
+
+Products are web pages stored under a category folder. You can create, edit, clone, and import products using the standard page management actions.
+
+When creating or editing a product, pay attention to these settings:
+
+<AccordionGroup>
+  <Accordion title="Perex tab — product image and tags">
+    - **Image** — the product preview image shown in the e-shop listing.
+    - **Tags** — keywords that allow visitors to filter products in the e-shop.
+  </Accordion>
+  <Accordion title="Attributes tab — product specifications">
+    Use attribute groups to define technical specifications such as manufacturer, diagonal size, or other product-specific properties. These attributes are displayed next to the product details in the e-shop.
+
+    For more information on configuring attributes, see the [Web Pages](/editor/webpages) documentation.
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Order management
+
+The **List of orders** application (found under **Applications > Eshop > Orders** or similar) shows all orders placed through the e-shop. You can filter, edit, and export orders, but you cannot create new orders manually — only edit or delete existing ones.
+
+<Note>
+The **Name** and **Last name** columns may show two values: the billing name and, in parentheses, the delivery name if it differs from the billing address. Both values are searched when you filter by name.
+</Note>
+
+### Order details
+
+Click an order to open the edit window. It contains the following tabs:
+
+<AccordionGroup>
+  <Accordion title="Basic">
+    Shows core order information including the **Status** field, which indicates where the order is in its lifecycle.
+
+    Available statuses: **New (unpaid)**, **Partially paid**, **Paid**, and any custom statuses added via the `basketInvoiceBonusStatuses` configuration variable.
+
+    Enable **Send notification to client** to send an email notification to the customer when you save changes.
+  </Accordion>
+  <Accordion title="Personal data">
+    Displays contact information, billing address, company data, and delivery address as entered by the customer during checkout.
+  </Accordion>
+  <Accordion title="Notification">
+    A preview of the email notification that will be sent to the customer if **Send notification to client** is enabled. You can customize the sender, subject, and message body before saving.
+
+    Use these placeholders in the notification text:
+    - `{STATUS}` — replaced with the current order status.
+    - `{ORDER_DETAILS}` — replaced with the full order summary (items and payments).
+  </Accordion>
+  <Accordion title="Payments">
+    Lists all payments recorded against this order. You can add, edit, and delete payment records here.
+  </Accordion>
+  <Accordion title="Items">
+    Lists all items in the order. You can add, edit, and delete order line items here.
+  </Accordion>
+  <Accordion title="Order (view)">
+    A read-only summary of the entire order including payments and items. This is the same content inserted as `{ORDER_DETAILS}` in customer notifications. It updates automatically when payments or items are changed.
+  </Accordion>
+  <Accordion title="Optional fields">
+    Additional fields whose values can be set according to your specific implementation needs.
+  </Accordion>
+</AccordionGroup>
+
+### Order status workflow
+
+The order status is updated automatically based on payment records:
+
+| Condition | Status |
+|---|---|
+| Paid amount is 0 | New (unpaid) |
+| Paid amount is less than the order total | Partially paid |
+| Paid amount covers the order total | Paid |
+
+<Warning>
+To delete an order, you must first change its status to **Cancelled**. Deleting the order also removes all related payments and items.
+</Warning>
+
+---
+
+## Delivery methods
+
+The **Delivery Methods** application lets you configure which delivery options are available and their pricing per country.
+
+### Configuring a delivery method
+
+Each delivery method has the following fields:
+
+| Field | Description |
+|---|---|
+| **Method of delivery** | The delivery type (immutable — defined by the system) |
+| **Name** | Display name shown to the customer during checkout. You can enter a translation key. |
+| **Supported countries** | Countries for which this method is available |
+| **Price without VAT** | Delivery cost excluding tax |
+| **VAT [%]** | VAT rate as a percentage |
+| **Price with VAT** | Calculated automatically from price and VAT rate |
+| **Order of arrangement** | Controls the sort order in the checkout delivery list |
+
+<Note>
+When creating a new delivery method record, select the delivery type from the drop-down list in the top left corner of the page.
+</Note>
+
+<Note>
+If you leave the **Price without VAT** or **VAT** fields blank when saving, a value of 0 is set automatically, making the delivery free of charge.
+</Note>
+
+You must select at least one supported country before a delivery method can be saved.
+
+---
+
+## Payment methods
+
+The **Payment Methods** application lets you configure the available payment gateways. Each payment method is defined programmatically — you cannot add new payment types through the user interface, only configure existing ones.
+
+### Configuring a payment method
+
+The editor for each payment method looks different, as each gateway requires its own set of credentials and settings. All payment method editors share these two fields:
+
+| Field | Description |
+|---|---|
+| **Method of payment** | The payment type (immutable) |
+| **Order of arrangement** | Controls the sort order in checkout and administration lists. Smaller values appear higher. |
+
+### Payment method status
+
+The table shows whether each payment method is **Configured** or **Not configured**. If you delete a payment method's configuration, its status reverts to **Not configured** but the payment method itself remains listed in the table.
+
+<Warning>
+Payment methods cannot be permanently removed from the list. The delete action only removes their configuration values, not the payment method entry itself.
+</Warning>

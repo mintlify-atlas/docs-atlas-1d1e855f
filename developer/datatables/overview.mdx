@@ -1,0 +1,550 @@
+---
+title: 'DataTables framework overview'
+description: 'How WebJET integrates datatables.net with Spring REST services to build interactive admin tables with built-in editors, server-side paging, row styling, and a rich JavaScript API.'
+---
+
+The WebJET DataTables framework wraps [datatables.net](https://datatables.net) with a Spring REST back-end and a custom editor extension. A single `WJ.DataTable(options)` call produces a fully functional table with inline editing, search, paging, sorting, export/import, and permission-aware buttons.
+
+Column definitions are generated from Java entity annotations (see [Column definitions](/developer/datatables/columns)) and passed into the constructor. The REST endpoint is implemented by extending `DatatableRestControllerV2` (see [REST controller](/developer/datatables/rest-controller)).
+
+## Basic example
+
+```javascript
+let galleryTable = null;
+window.domReady.add(function () {
+
+    let url = "/admin/rest/components/gallery";
+
+    let columns = [
+        {
+            data: "id",
+            name: "id",
+            title: "ID",
+            defaultContent: '',
+            className: 'dt-select-td',
+            renderFormat: "dt-format-selector"
+        },
+        {
+            data: "imageName",
+            name: "imageName",
+            title: "File name",
+            renderFormat: "dt-format-text",
+            renderFormatLinkTemplate: "javascript:;",
+            renderFormatPrefix: '<i class="ti ti-pencil"></i> ',
+            className: "dt-row-edit",
+            editor: { type: "text" }
+        },
+        {
+            data: "imagePath",
+            name: "imagePath",
+            title: "Directory",
+            renderFormat: "dt-format-text",
+            editor: {
+                type: "text",
+                attr: { "data-dt-field-hr": "after" }
+            }
+        }
+    ];
+
+    galleryTable = WJ.DataTable({
+        url: url,
+        serverSide: true,
+        columns: columns,
+    });
+});
+```
+
+```html
+<table class="datatableInit table cardView cardViewS"></table>
+```
+
+## `WJ.DataTable(options)` constructor
+
+### Required options
+
+<ParamField path="url" type="string" required>
+  Base URL of the REST service. The datatable appends `/all` to retrieve all records (unless `noAll` is set), `findByColumns` for searching, and `/editor` for saving.
+</ParamField>
+
+<ParamField path="columns" type="array" required>
+  Column definitions. Generate these from Java annotations using `layout.getDataTableColumns('com.example.MyEntity')` in Thymeleaf/Pug templates.
+</ParamField>
+
+### Display and paging
+
+<ParamField path="serverSide" type="boolean" default="false">
+  When `true`, paging, ordering, and searching are delegated to the server via REST calls. When `false`, all data is loaded upfront and processed client-side.
+</ParamField>
+
+<ParamField path="paging" type="boolean" default="true">
+  Set to `false` to disable pagination and render all returned rows.
+</ParamField>
+
+<ParamField path="order" type="array">
+  Default sort order. Because Thymeleaf evaluates `[[...]]` expressions, build the array through a variable:
+
+  ```javascript
+  var order = [];
+  order.push([5, 'desc']);
+
+  configurationDatatable = WJ.DataTable({
+      url: "/admin/v9/settings/configuration",
+      columns: columns,
+      order: order
+  });
+  ```
+</ParamField>
+
+<ParamField path="stateSave" type="boolean" default="true">
+  Set to `false` to stop the browser from remembering column order and layout between sessions.
+</ParamField>
+
+<ParamField path="autoHeight" type="boolean" default="true">
+  By default the table stretches to fill the available window height. Set to `false` to use natural content height instead.
+</ParamField>
+
+### Identifiers
+
+<ParamField path="id" type="string" default="datatableInit">
+  Unique identifier for the datatable. Required when multiple datatables exist on one page.
+</ParamField>
+
+<ParamField path="editorId" type="string">
+  Unique identifier for the editor instance. Defaults to `id`.
+</ParamField>
+
+### Editor tabs
+
+<ParamField path="tabs" type="array">
+  Tab definitions for the editor dialog. Each entry has at minimum `id` and `title`. Optional attributes:
+
+  - `selected` — marks the default tab.
+  - `className` — add `hide-on-create`, `hide-on-edit`, or `hide-on-duplicate`.
+  - `perms` — hide the tab if the user lacks the named permission.
+  - `hideOnCreate` / `hideOnEdit` — boolean shortcuts.
+  - `content` — raw HTML to inject; the tab will have no editor fields.
+
+  ```javascript
+  let tabs = [
+      { id: 'basic',       title: 'Basic',    selected: true  },
+      { id: 'metadata',    title: 'Metadata', selected: false, className: 'hide-on-create' },
+      { id: 'history',     title: '[[#{editor.tab.history}]]', hideOnCreate: true }
+  ];
+
+  galleryTable = WJ.DataTable({ url, columns, tabs });
+  ```
+</ParamField>
+
+### AJAX event hooks
+
+<ParamField path="onXhr" type="function">
+  Called after data loads. Signature: `function(TABLE, e, settings, json, xhr)`.
+</ParamField>
+
+<ParamField path="onPreXhr" type="function">
+  Called before each request. Use it to append extra parameters (prefix with `fixed_` to distinguish from datatable parameters):
+
+  ```javascript
+  onPreXhr: function(TABLE, e, settings, data) {
+      data.fixed_searchFilterBotsOut = $('#botFilterOut').is(':checked');
+  }
+  ```
+</ParamField>
+
+<ParamField path="onEdit" type="function">
+  Called when a row's edit link is clicked. Signature: `function(TABLE, row, dataAfterFetch, dataBeforeFetch)`. Open the standard editor with `TABLE.wjEdit(row)`.
+</ParamField>
+
+<ParamField path="onRowCallback" type="function">
+  Called for each rendered row. Use it to apply CSS classes dynamically:
+
+  ```javascript
+  onRowCallback: function(TABLE, row, data) {
+      if (data.active === false) $(row).addClass("is-not-public");
+  }
+  ```
+</ParamField>
+
+### Pre-fetch behaviour
+
+<ParamField path="fetchOnEdit" type="boolean" default="false">
+  When `true`, a REST call refreshes the current record's data from the server before the editor opens, ensuring you always edit the latest version.
+</ParamField>
+
+<ParamField path="fetchOnCreate" type="boolean" default="false">
+  When `true`, a REST call with ID `-1` fetches default values for a new record before the create editor opens.
+</ParamField>
+
+### Button and permission control
+
+<ParamField path="hideButtons" type="string">
+  Comma-separated list of button names to hide, e.g. `"create,import,export"`.
+</ParamField>
+
+<ParamField path="perms" type="object">
+  Map each operation to a permission name. Hides the toolbar button and the corresponding editor action button when the user lacks the right:
+
+  ```javascript
+  perms: {
+      create:    'addPage',
+      edit:      'pageSave',
+      duplicate: 'pageSaveAs',
+      remove:    'deletePage'
+  }
+  ```
+
+  Check permissions at runtime with `TABLE.hasPermission('create')`.
+
+  <Warning>
+    Front-end permission checks are a UX convenience only. Always enforce permissions in the REST service or service layer as well.
+  </Warning>
+</ParamField>
+
+<ParamField path="editorButtons" type="array">
+  Custom buttons that replace the default Save button in the editor:
+
+  ```javascript
+  editorButtons: [
+      {
+          text: '<i class="fal fa-check"></i> Save',
+          action: function() { this.submit(); }
+      }
+  ]
+  ```
+</ParamField>
+
+### Data initialisation
+
+<ParamField path="initialData" type="object">
+  Pre-loaded data used on the first render, avoiding an extra REST call. Set `initialData.forceData = true` to use empty initial data unconditionally.
+</ParamField>
+
+<ParamField path="defaultSearch" type="object">
+  Pre-applied filter values keyed by CSS selector. Applied before the first REST call:
+
+  ```json
+  {
+      ".dt-filter-from-dayDate": "06.06.2022",
+      ".dt-filter-to-dayDate":   "22.08.2022"
+  }
+  ```
+</ParamField>
+
+### Footer sum
+
+<ParamField path="summary" type="object">
+  Displays a footer row that sums selected numeric columns:
+
+  ```javascript
+  summary: {
+      mode:    "all",   // "all" | "visible" | "datatable"
+      columns: ["visits", "sessions", "uniqueUsers"],
+      title:   "[[#{components.summary.total_title}]]"
+  }
+  ```
+
+  - `mode: "all"` — sums across all pages (calls `/sumAll` when `serverSide: true`).
+  - `mode: "visible"` — sums only the current page.
+  - `mode: "datatable"` — uses `DatatablePageImpl.summary` returned by the REST service.
+
+  <Warning>
+    When `serverSide: true` and `mode: "all"`, the footer totals do **not** change as the user filters the table.
+  </Warning>
+</ParamField>
+
+### Other options
+
+<ParamField path="noAll" type="boolean" default="false">
+  Prevents appending `/all` to the URL. Search will not work when set.
+</ParamField>
+
+<ParamField path="removeColumns" type="string">
+  Comma-separated column names to suppress from the display, e.g. `"whenToPublish,datePublished"`.
+</ParamField>
+
+<ParamField path="keyboardSave" type="boolean" default="true">
+  Set to `false` to disable `Ctrl+S`/`Cmd+S` saving in the editor.
+</ParamField>
+
+<ParamField path="editorLocking" type="boolean" default="true">
+  Set to `false` to turn off the concurrent-edit notification service.
+</ParamField>
+
+<ParamField path="nestedModal" type="boolean" default="false">
+  Set to `true` for a datatable embedded as a field inside another editor. Adds the `DTE_nested_modal` CSS class.
+</ParamField>
+
+---
+
+## Column `renderFormat` values
+
+The `renderFormat` property controls how cell values are presented and which header options appear.
+
+| Value | Description |
+|---|---|
+| `dt-format-selector` | Checkbox to select the row; use as the first column |
+| `dt-format-none` | No header options |
+| `dt-format-text` | Plain text with HTML escaping |
+| `dt-format-text-wrap` | Same as text but wraps; auto-set for `TEXTAREA` fields |
+| `dt-format-select` | Renders from `editor.options` |
+| `dt-format-checkbox` | HTML checkbox |
+| `dt-format-boolean-true` / `dt-format-boolean-yes` / `dt-format-boolean-one` | Boolean display |
+| `dt-format-number` / `dt-format-percentage` | Numeric display |
+| `dt-format-number--decimal` / `dt-format-percentage--decimal` | Decimal numeric |
+| `dt-format-number--text` | Rounded number; large values shown as e.g. `10k` |
+| `dt-format-filesize` | File size as `10.24 kB` |
+| `dt-format-date` / `dt-format-date-time` | Date/time with from–to filter |
+| `dt-format-date--text` / `dt-format-date-time--text` | Date as text |
+| `dt-format-link` | Text as hyperlink; use with `renderFormatLinkTemplate` |
+| `dt-format-image` | Thumbnail preview with link and text |
+| `dt-format-image-notext` | Thumbnail preview only |
+| `dt-format-mail` | Text as `mailto:` link |
+| `dt-row-edit` | Inline row-edit trigger |
+
+Set `renderFormatLinkTemplate` to a URL pattern (e.g. `"/temps-list.html"` or `"javascript:;"`) and `renderFormatPrefix` for a leading icon:
+
+```javascript
+{
+    data: "imageName",
+    name: "imageName",
+    title: "File name",
+    renderFormat: "dt-format-text",
+    renderFormatLinkTemplate: "javascript:;",
+    renderFormatPrefix: '<i class="ti ti-pencil"></i> ',
+    className: "dt-row-edit"
+}
+```
+
+### Displaying raw HTML
+
+By default, DataTables escapes HTML to prevent XSS. To allow HTML rendering in a cell, add the `allow-html` CSS class:
+
+```java
+@DataTableColumn(
+    inputType = DataTableColumnType.TEXTAREA,
+    title = "[[#{admin.conf_editor.value}]]",
+    className = "allow-html"
+)
+private String value;
+```
+
+<Warning>
+  Use `allow-html` only for trusted content. Allowing raw HTML from untrusted user input creates XSS vulnerabilities.
+</Warning>
+
+---
+
+## Row styling
+
+Rows can receive CSS classes to indicate status. Use `BaseEditorFields.addRowClass(String)` in your `EditorFields` implementation:
+
+```java
+public class DocEditorFields extends BaseEditorFields {
+    public void fromDocDetails(DocDetails doc) {
+        // Bold for the default page of a directory
+        if (groupDetails != null && doc.getDocId() > 0
+                && groupDetails.getDefaultDocId() == doc.getDocId()) {
+            addRowClass("is-default-page");
+        }
+        // Red for disabled pages
+        if (doc.isAvailable() == false) addRowClass("is-not-public");
+    }
+}
+```
+
+Alternatively, apply classes in JavaScript via `onRowCallback`:
+
+```javascript
+onRowCallback: function(TABLE, row, data) {
+    if (data.active === false) $(row).addClass("is-not-public");
+}
+```
+
+Built-in row CSS classes:
+
+| Class | Appearance |
+|---|---|
+| `is-disabled` | Red — inactive item |
+| `is-disapproved` | Red — unapproved item |
+| `is-not-public` | Red — non-public item |
+| `is-default-page` | Bold — main page of a directory |
+
+The framework reads `data.editorFields.rowClass` on each row and applies it automatically via the `rowCallback` option.
+
+---
+
+## Status icons
+
+Status icons display record state inline in a dedicated column backed by `EditorFields`. Use `BaseEditorFields.addStatusIcon(String className)` to add icon CSS classes, then define the column using `@DataTableColumn` with the name `statusIcons`:
+
+```java
+public class DocEditorFields extends BaseEditorFields {
+
+    @DataTableColumn(
+        inputType = DataTableColumnType.SELECT,
+        title = "webpages.icons.title",
+        hiddenEditor = true, hidden = false, visible = true,
+        sortAfter = "id", className = "allow-html", orderable = false,
+        editor = { @DataTableColumnEditor(
+            options = {
+                @DataTableColumnEditorAttr(
+                    key   = "<i class=\"ti ti-map-pin\"></i> [[#{webpages.icons.showInMenu}]]",
+                    value = "showInMenu:true"),
+                @DataTableColumnEditorAttr(
+                    key   = "<i class=\"ti ti-map-pin-off\"></i> [[#{webpages.icons.notShowInMenu}]]",
+                    value = "showInMenu:false"),
+                @DataTableColumnEditorAttr(
+                    key   = "<i class=\"ti ti-lock-filled\"></i> [[#{webpages.icons.onlyForLogged}]]",
+                    value = "passwordProtected:notEmpty"),
+                @DataTableColumnEditorAttr(
+                    key   = "<span style=\"color: #FF4B58\">[[#{webpages.icons.disabled}]]</span>",
+                    value = "available:false"),
+                @DataTableColumnEditorAttr(
+                    key   = "<i class=\"ti ti-external-link\"></i> [[#{webpages.icons.externalLink}]]",
+                    value = "externalLink:notEmpty"),
+                @DataTableColumnEditorAttr(
+                    key   = "<i class=\"ti ti-eye\"></i> [[#{webpages.icons.notSearchable}]]",
+                    value = "searchable:false")
+            }
+        )}
+    )
+    private String statusIcons;
+
+    public void fromDocDetails(DocBasic doc, boolean loadSubQueries) {
+        if (doc.isShowInMenu()) addStatusIcon("ti ti-map-pin");
+        else                    addStatusIcon("ti ti-map-pin-off");
+        if (Tools.isNotEmpty(doc.getExternalLink()))    addStatusIcon("ti ti-external-link");
+        if (doc.isSearchable() == false)                addStatusIcon("ti ti-eye-off");
+        if (Tools.isNotEmpty(doc.getPasswordProtected())) addStatusIcon("ti ti-lock-filled");
+    }
+
+    public String getStatusIcons() {
+        return getStatusIconsHtml();
+    }
+}
+```
+
+The `value` in each option follows the pattern `property:condition` and drives server-side filtering. Supported conditions:
+
+| Pattern | Meaning |
+|---|---|
+| `property:true` | Attribute is `true` |
+| `property:false` | Attribute is `false` |
+| `property:notEmpty` | Attribute is not empty |
+| `property:empty` | Attribute is null or empty string |
+| `property:%text%` | Attribute contains text (LIKE search) |
+| `property:!%text%` | Attribute does not contain text (NOT LIKE) |
+
+---
+
+## JavaScript API
+
+```javascript
+// Selected rows data
+galleryTable.rows({ selected: true }).data();
+
+// Change the REST URL and reload
+galleryTable.setAjaxUrl("/admin/rest/nova-url");
+galleryTable.ajax.reload();
+
+// Apply a filter and redraw
+galleryTable.columns(3).search("^" + virtualPath + "$").draw();
+
+// Set JSON into the current editor
+EDITOR.setJson(json);
+// Currently edited JSON object
+EDITOR.currentJson;
+
+// Options from the last REST response (for number-to-label conversion in export)
+TABLE.DATA.jsonOptions;
+// Full URL of the last REST call
+TABLE.DATA.urlLatest;
+// All parameters of the last REST call
+TABLE.DATA.urlLatestParams;
+
+// Show / hide toolbar buttons (name = value of data-dtbtn attribute)
+TABLE.hideButton("create");
+TABLE.hideButtons(['import', 'export']);
+TABLE.showButton("export");
+
+// Turn off cell-edit mode (always call when switching tab content)
+TABLE.cellEditOff();
+
+// Recalculate page length (e.g. after changing image size in gallery)
+TABLE.calculateAutoPageLength(updateLengthSelect);
+```
+
+### Execute a server-side action
+
+```javascript
+// Signature:
+// nejakaTable.executeAction(action, doNotCheckEmptySelection, confirmText, noteText, customData, forceIds)
+
+// Simple action requiring row selection
+galleryTable.executeAction("rotate");
+
+// Action that does not require a selection, with confirmation dialog
+cacheObjectsTable.executeAction(
+    "deletePictureCache",
+    true,
+    "[[#{components.data.deleting.imgcache.areYouSure}]]",
+    "[[#{components.data.deleting.imgcache.areYouSureNote}]]"
+);
+```
+
+The call posts to the REST endpoint `/action/{action}` on the server. The following events fire afterward:
+
+- `WJ.DT.executeAction` — on successful completion.
+- `WJ.DT.executeActionCancel` — on failure or when the user cancels.
+
+### Adding toolbar buttons
+
+```javascript
+galleryTable.button().add(buttonCounter++, {
+    text: '<i class="ti ti-repeat"></i>',
+    action: function (e, dt, node) {
+        galleryTable.executeAction("rotate");
+    },
+    init: function (dt, node, config) {
+        // Show only when at least one row is selected
+        $.fn.dataTable.Buttons.showIfRowSelected(this, dt);
+    },
+    className: 'btn btn-outline-secondary',
+    attr: {
+        title: 'Rotate',
+        'data-toggle': 'tooltip'
+    }
+});
+```
+
+`init` visibility helpers:
+
+| Helper | Behaviour |
+|---|---|
+| `showIfRowSelected(this, dt)` | Active when ≥ 1 row selected |
+| `showIfRowUnselected(this, dt)` | Active when no rows selected |
+| `showIfOneRowSelected(this, dt)` | Active when exactly 1 row selected |
+
+---
+
+## Events
+
+| Event | When fired |
+|---|---|
+| `WJ.DTE.open` | Editor window is opening |
+| `WJ.DTE.opened` | Editor window is fully visible |
+| `WJ.DTE.close` | Editor window is closing |
+| `WJ.DTE.forceReload` | REST service requested a datatable refresh |
+| `WJ.DTE.tabclick` | Tab clicked in the editor |
+| `WJ.DTE.submitclick` | Save button clicked |
+| `WJ.DTE.closeclick` | Close button clicked |
+| `WJ.DTE.xhrfetch` | Data loaded via `fetchOnEdit` |
+| `WJ.DTE.resize` | Editor window maximised/minimised |
+
+Listen for a table reload to update a JS tree:
+
+```javascript
+window.addEventListener('WJ.DTE.forceReload', (e) => {
+    $('#SomStromcek').jstree(true).refresh();
+}, false);
+```

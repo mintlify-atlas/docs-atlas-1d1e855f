@@ -1,0 +1,107 @@
+---
+title: 'Export and import'
+description: 'Export data table records to Excel, and import records from Excel to create or update data in WebJET CMS.'
+keywords: ['export', 'import', 'Excel', 'xlsx', 'datatable', 'data table', 'CSV']
+---
+
+Data tables in WebJET CMS support exporting records to Excel (xlsx) and importing records from Excel. You can use export and import to back up data, migrate records between environments, or perform bulk edits outside the CMS.
+
+## Exporting data
+
+<Steps>
+  <Step title="Open the export dialog">
+    Click the **Export icon** in the table toolbar. The export dialog opens with a file name pre-filled based on the current page title and the current date and time.
+  </Step>
+  <Step title="Choose the export format">
+    Select **Excel (xlsx)** to download a spreadsheet, or **Print** to send the data directly to your printer.
+  </Step>
+  <Step title="Set advanced options (server-paginated tables)">
+    For tables that use server-side pagination, open the **Advanced** tab in the export dialog to choose:
+    - **Current page** or **all pages**
+    - **Filtered rows** (matching the active search) or **all rows**
+    - The current sort order
+
+    For tables with client-side pagination, only the current/all pages option is available.
+  </Step>
+  <Step title="Click Export">
+    Click **Export** to download the xlsx file. If you selected **Print**, the standard print dialog opens instead.
+  </Step>
+</Steps>
+
+### What the exported file contains
+
+The exported Excel file reflects the **editor columns**, not only the columns currently visible in the table. This ensures the file can be used for re-import later.
+
+The first row of the file contains column headers in the format `Column label|fieldName`. The `fieldName` part is used during import to match each Excel column to the correct field in the editor — even when multiple fields share the same label.
+
+<Info>
+For select/dropdown fields, the export contains the **text value** (for example, a template name) rather than the internal ID. During import, WebJET CMS matches the text value back to the correct ID, so records can be transferred correctly between environments where IDs may differ.
+</Info>
+
+### Export limits
+
+By default, a single export can contain a maximum of **50,000 records**. If you need to export more records, apply a filter to narrow the data and run multiple exports.
+
+<Tip>
+The 50,000-record limit can be increased by your administrator using the `datatablesExportMaxRows` configuration variable.
+</Tip>
+
+## Importing data
+
+<Steps>
+  <Step title="Open the import dialog">
+    Click the **Import icon** in the table toolbar. The import dialog opens.
+  </Step>
+  <Step title="Select an import mode">
+    Choose one of the following options:
+
+    - **Add as new records** — all rows in the Excel file are imported as new records. The ID column is ignored. An error will occur if a uniqueness constraint is violated (for example, importing a user with a login name that already exists).
+    - **Update existing records** — each row is matched against an existing record using the column you select in the **By column** field. Matched records are updated. If no match is found, the row is created as a new record.
+    - **Import only new records** — only rows not already present in the database (as identified by the **By column** field) are imported. Existing records are left unchanged.
+  </Step>
+  <Step title="Select the match column (update and new-only modes)">
+    When using **Update existing records** or **Import only new records**, select the column to match on using the **By column** dropdown. Common choices include name, URL, email, or another field that uniquely identifies a record.
+
+    <Warning>
+    If you match on a column that is not unique (for example, Last Name), multiple database records may be updated for a single row in the Excel file.
+    </Warning>
+  </Step>
+  <Step title="Choose the Excel file and click Import">
+    Select your xlsx file and click **Import**. A progress bar shows the import status. Records are processed in batches of 25, so the progress bar advances incrementally.
+  </Step>
+</Steps>
+
+### Importing only selected columns
+
+You do not need to include every column in your Excel file. If a column is removed from the spreadsheet before import, its values in the database are left unchanged. This lets you update only the specific fields you need without overwriting everything else.
+
+<Tip>
+This is useful for bulk-updating a single field: export the data, delete all columns except the ID and the field you want to change, edit the values, and re-import using **Update existing records** matched by the ID column.
+</Tip>
+
+### Handling errors during import
+
+The import dialog includes a **Skip erroneous entries** option.
+
+<AccordionGroup>
+  <Accordion title="Skip erroneous entries: off (default)">
+    If an error is encountered, the import stops immediately and displays an error message. All records processed before the error are saved. Records after the error are not imported.
+
+    Use this setting when you want strict validation and prefer to fix all errors before re-importing.
+  </Accordion>
+  <Accordion title="Skip erroneous entries: on">
+    The import continues past errors. Each error is reported in a notification that shows the error details and the row number in the Excel file. Multiple notifications may appear because data is processed in batches of 25 records.
+
+    Use this setting when importing large files where isolated errors should not block the rest of the import.
+  </Accordion>
+</AccordionGroup>
+
+<Note>
+Because data is processed in batches of 25 records, you may see multiple error notifications for a single import run — one per batch that contains an error.
+</Note>
+
+## Tips
+
+- **Export before importing** — exporting existing records first gives you a correctly formatted template with the right column headers for re-import.
+- **Match on a unique column** — when updating records, choose a column whose values are unique in the database (such as an email address or URL) to avoid unintended multi-record updates.
+- **Check select field values** — select/dropdown fields export as human-readable text. If you change these values in Excel, make sure the text matches an existing option in the target environment, or the import may fail to resolve the correct ID.

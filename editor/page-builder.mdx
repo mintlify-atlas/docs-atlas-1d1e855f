@@ -1,0 +1,144 @@
+---
+title: "Page Builder"
+description: "Build pages visually from pre-made blocks — add, move, style, and delete sections, containers, and columns without touching HTML."
+---
+
+Page Builder is a special editing mode that lets you compose a page from pre-made building blocks. Instead of editing the full page HTML, you work with individual regions — sections, containers, and columns — and choose from a library of ready-made blocks to fill them.
+
+This separation protects the structural HTML of the page. You can edit text and images inside a column without accidentally deleting a surrounding `<section>` or `<div class="container">`.
+
+<Note>
+  Page Builder mode is enabled per template or template group. If you do not see the block structure when you open a page, the page uses Standard or HTML editor mode instead.
+</Note>
+
+---
+
+## Switching editor modes
+
+When a page uses Page Builder, the editor toolbar shows a toggle between editor modes:
+
+- **Page Builder** — the default mode; the page is divided into coloured, interactive blocks.
+- **Standard** — the full WYSIWYG text editor for the entire page.
+- **HTML** — raw HTML editing (for specialised pages supplied by a developer).
+
+<Warning>
+  Content is not synchronised between modes. If you start editing in Page Builder and switch to the Standard editor, changes made in Page Builder will not carry over, and vice versa. Always finish your work in one mode before switching. Switching from Page Builder to Standard is remembered until the page is refreshed; subsequent Page Builder pages will also open in Standard mode until you toggle back.
+</Warning>
+
+Next to the mode toggle, a device-size selector lets you preview how column widths look on different screen sizes:
+
+| Setting | Screen width | CSS class set |
+|---|---|---|
+| Desktop | ≥ 1200 px | `col-xl-*` |
+| Tablet | 768–1199 px | `col-md-*` |
+| Mobile | < 768 px | `col-*` |
+
+---
+
+## Understanding the block structure
+
+Moving your cursor over the page highlights the structural layers in different colours:
+
+<CardGroup cols={3}>
+  <Card title="Section (blue)" icon="square">
+    The outermost building block, typically full-width. Corresponds to an HTML `<section>` element.
+  </Card>
+  <Card title="Container (red)" icon="square">
+    Sits inside a section and constrains content to a narrower width for better readability. Corresponds to `<div class="container">`.
+  </Card>
+  <Card title="Column (green)" icon="square">
+    The innermost editable region. Contains text, images, or embedded applications. Corresponds to `<div class="col-*">`.
+  </Card>
+</CardGroup>
+
+---
+
+## Working with blocks
+
+### Opening the toolbar
+
+Hover over any section, container, or column to see its coloured border. Click the **gear icon** that appears to open the toolbar for that element.
+
+The toolbar contains:
+
+| Option | What it does |
+|---|---|
+| **Style** | Opens the style panel to set background image, background colour, alignment, padding, and other visual properties |
+| **Column width** | Sets the column width per device size (desktop / tablet / mobile) |
+| **Move block** | Shows available positions on the page; click a position to move the block there |
+| **Duplicate** | Creates a copy of the block in the same position |
+| **Favorites** | Saves the block to your personal Favorites list for quick reuse |
+| **Delete** | Removes the block from the page |
+
+### Adding a new block
+
+After clicking a gear icon, **+** insertion points appear above and below the current block. Click a **+** to open the block picker, which has three tabs:
+
+<CardGroup cols={3}>
+  <Card title="Basic" icon="grid-2x2">
+    Simple layout blocks in different column combinations (full-width, two columns, three columns, etc.).
+  </Card>
+  <Card title="Library" icon="book">
+    Custom blocks prepared for your website. Browse by name or filter by tag.
+  </Card>
+  <Card title="Favorites" icon="star">
+    Blocks you have saved with the Favorites action.
+  </Card>
+</CardGroup>
+
+A **+** button also appears at the bottom of the page for quickly appending a new section.
+
+### Searching and filtering in the Library tab
+
+Type a block name into the search box to narrow the list. You can also click a **tag** to show only blocks with that label. Tags and block names are defined by your web designer in the `pagebuilder.properties` configuration file for each block group.
+
+### Editing column width
+
+Select a column's gear icon and choose **Column width**. Set the width for each device size independently. This allows you to display three columns side by side on desktop while stacking them full-width on mobile.
+
+---
+
+## Editing content inside a block
+
+Click directly inside a column (green area) to activate the CKEditor text editor for that region. You can type, format, insert images, and add links just as in the Standard editor — but only within that column.
+
+<Tip>
+  Multiple CKEditor instances run simultaneously in Page Builder — one per editable column. Click inside a different column to move focus there.
+</Tip>
+
+---
+
+## Splitting a column
+
+The **Split Column** function lets you divide an existing column into two without having to insert a new column manually and copy content across.
+
+<Steps>
+  <Step title="Find the yellow insertion bar">
+    Hover over the column you want to split. A yellow **+** bar appears between content blocks inside the column.
+  </Step>
+  <Step title="Click + and choose Block">
+    Click the **+** in the yellow bar and select **Block** from the menu.
+  </Step>
+  <Step title="Select Split Column in the Basic tab">
+    In the block picker, open the **Basic** tab and choose the **Split Column** option.
+  </Step>
+</Steps>
+
+---
+
+## Favorite blocks
+
+Mark a block as a favourite by clicking **Favorites** in its gear toolbar. Saved blocks appear in the **Favorites** tab of the block picker, letting you quickly insert blocks you use often without searching the library each time.
+
+---
+
+## Unsaved changes detection
+
+The editor monitors changes to the page content. If you click **Cancel** to close the editor window while there are unsaved changes, a warning dialog appears:
+
+- **OK** — close without saving (changes are lost).
+- **Cancel** — return to the editor to save your work.
+
+<Note>
+  Change detection activates 5 seconds after the page opens in the editor. This delay allows all scripts and application previews to fully load before the initial snapshot is taken.
+</Note>

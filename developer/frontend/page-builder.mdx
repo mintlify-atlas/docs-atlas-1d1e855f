@@ -1,0 +1,349 @@
+---
+title: "Creating Page Builder blocks"
+description: "How to create, structure, and configure Page Builder blocks for WebJET CMS — block types, directory layout, Thymeleaf support, JavaScript customisation, and CSS style naming."
+keywords: ["page builder", "blocks", "section", "container", "column", "content", "pagesupport", "css styles"]
+---
+
+Page Builder is a special page editing mode that separates text editing from structural editing. Instead of exposing the full HTML of a page to editors, it presents the page as a set of composable **blocks**. This page explains how to create those blocks.
+
+## How Page Builder works
+
+In Page Builder mode the page structure is built from blocks organised as:
+
+- **Section** (`<section>`) — the outermost structural unit, marked in blue in the editor
+- **Container** (`<div class="container">`) — holds rows inside a section, marked in red
+- **Row** (`<div class="row">`) — standard Bootstrap row, not directly editable in Page Builder
+- **Column** (`<div class="col-*">`) — the editable content unit, marked in green
+
+Editors insert and rearrange sections, containers, and columns using Page Builder's toolbar. Text inside columns is edited with CKEditor.
+
+<Info>
+Page Builder mode is set per template group or per template in the **Page editor type** field. Set it to **Page Builder** to activate this mode for pages using that template.
+</Info>
+
+## Block directory structure
+
+Blocks are loaded automatically from:
+
+```
+/templates/INSTALL_NAME/TEMPLATE_NAME/pagebuilder/
+```
+
+Inside that root directory, create subdirectories for each block type:
+
+```
+pagebuilder/
+├── section/          # Full-width sections (blue)
+│   └── Contact/
+│       ├── contact01.html
+│       ├── contact01.jpg
+│       ├── form.html
+│       └── form.jpg
+├── container/        # Containers (red)
+│   └── Teams/
+│       ├── teams01.html
+│       └── teams01.jpg
+├── column/           # Column content (green)
+│   └── Text-With-Picture/
+│       ├── left.html
+│       └── right.html
+└── content/          # Inline text/button blocks (yellow insert bar)
+    └── Buttons/
+        ├── standard.html
+        └── contactus.html
+```
+
+<Warning>
+Each block type directory (`section`, `container`, `column`, `content`) must contain **named group subdirectories** (e.g. `Contact`, `Teams`). Individual HTML files go inside those group subdirectories, not directly in the block type directory.
+</Warning>
+
+### Block types in the editor
+
+| Directory | Editor colour | When to use |
+|---|---|---|
+| `section` | Blue | Full-width horizontal sections with background, hero areas, feature rows |
+| `container` | Red | Content groups inside a section that need a fixed-width wrapper |
+| `column` | Green | Individual column content: text, image + text combos, cards |
+| `content` | Yellow insert bar | Small inline elements: buttons, quotes, callouts |
+
+## Block HTML structure
+
+Each block is a plain HTML file. Use Bootstrap grid classes for columns. A complete section block example:
+
+```html
+<section>
+  <div class="container">
+    <div class="row">
+      <div class="col-12">
+        <h2 class="text-center">Section heading</h2>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-12 col-md-6 col-xl-3 text-center">
+        <img src="/thumb/images/placeholder.jpg?w=160&h=160&ip=5"
+             class="fixedSize-160-160-5" alt="Feature image" />
+        <h3>Feature one</h3>
+        <p>Short description of the feature.</p>
+      </div>
+      <div class="col-12 col-md-6 col-xl-3 text-center">
+        <img src="/thumb/images/placeholder.jpg?w=160&h=160&ip=5"
+             class="fixedSize-160-160-5" alt="Feature image" />
+        <h3>Feature two</h3>
+        <p>Short description of the feature.</p>
+      </div>
+    </div>
+  </div>
+</section>
+```
+
+<Tip>
+Include all responsive breakpoints (`col-12 col-md-6 col-xl-3`) in block templates. Page Builder allows editors to adjust column widths per device (desktop ≥ 1200 px, tablet 768–1199 px, mobile &lt; 768 px), and these classes map to `col-xl`, `col-md`, and `col-` prefixes respectively.
+</Tip>
+
+## Block ID (`data-pb-id`)
+
+After a block is inserted into a page, WebJET sets the `data-pb-id` attribute on the inserted top-level element (e.g. the `<section>` or the `<div class="container">`). The value is the path to the HTML file encoded in Base64:
+
+```html
+<section data-pb-id="c2VjdGlvbi8wMC1aYWtsYWRuZS1wcnZreS9DaXRhdF92MQ==">
+  ...
+</section>
+```
+
+Decode the path in JavaScript with:
+
+```javascript
+atob("c2VjdGlvbi8wMC1aYWtsYWRuZS1wcnZreS9DaXRhdF92MQ==");
+// → 'section/00-Zakladne-prvky/Citat_v1'
+```
+
+You can search for this path in the WebJET admin to find all pages that use a given block, which is useful when you need to update a block and identify affected pages.
+
+For blocks from the built-in Basic tab, the ID is in the format `pb-basic-TYPE.INDEX` where the type values are: `0` = column, `1` = container, `2` = section, `4` = content.
+
+## Block name and tags
+
+Create a `pagebuilder.properties` file (UTF-8) in a block group subdirectory to set its display name, icon, and search tags:
+
+```properties
+title=Contact blocks
+icon=fa fa-address-card
+tags=Contact,Form
+
+title.contact01=Contact card
+title.form=Contact form
+```
+
+Create language versions alongside it, e.g. `pagebuilder_en.properties` for English.
+
+<Note>
+If you build blocks from PUG source files, make sure your `build-pug.js` script copies `.properties` files for directories matching `/pagebuilder/`:
+
+```javascript
+} else if (
+  (filePath.match(/\.png$/) || filePath.match(/\.properties$/))
+  && filePath.match(/pagebuilder/)
+)
+```
+</Note>
+
+## Thymeleaf support in blocks
+
+Blocks are inserted into the page without full Thymeleaf processing (the HTML is copied directly into the editor). However, the following attributes **are** executed at insert time:
+
+| Attribute | Supported |
+|---|---|
+| `data-iwcm-write` | Yes — application inclusion |
+| `data-iwcm-remove` | Yes — application inclusion |
+| `data-th-src` | Yes — image source |
+| `data-th-href` | Yes — link href |
+
+The following Ninja path objects are also resolved at insert time, allowing you to reference template assets with a static fallback path:
+
+```html
+<img
+  src="./assets/images/logo.png"
+  data-th-src="${ninja.temp.basePathImg}logo.png"
+  alt="Logo"
+/>
+```
+
+Objects resolved at insert: `${ninja.temp.basePath}`, `${ninja.temp.basePathAssets}`, `${ninja.temp.basePathCss}`, `${ninja.temp.basePathJs}`, `${ninja.temp.basePathPlugins}`, `${ninja.temp.basePathImg}`.
+
+## Editable and non-editable elements
+
+Page Builder automatically initialises CKEditor on:
+- Elements with classes matching `col-*`
+- Elements with CSS class `pb-editable`
+
+Use these classes to override the default behaviour:
+
+| Class | Effect |
+|---|---|
+| `pb-editable` | Force-enable CKEditor on any element |
+| `pb-not-editable` | Disable CKEditor on this element and its children |
+| `pb-always-mark` | Show the Page Builder toolbar for a non-editable element |
+| `pb-not-section` | Exclude element from being treated as a section |
+| `pb-not-container` | Exclude element from being treated as a container |
+| `pb-not-column` | Exclude element from being treated as a column |
+| `pb-custom-container` | Treat element as a container even without `class="container"` |
+
+<Warning>
+Do not place text directly inside a column element. Wrap it in a `<p>` or another block element. Page Builder wraps column content in a `<div class="column-content">` when the editor opens, and bare text can cause layout issues.
+</Warning>
+
+## Unique IDs in blocks
+
+For elements that require a unique `id` (e.g. carousels, modals), use the placeholder `__ID__`. It is replaced with a random timestamp value each time the block is inserted:
+
+```html
+<div class="carousel slide" id="carousel__ID__" data-bs-ride="carousel">
+  <button data-bs-target="#carousel__ID__" data-bs-slide="prev" type="button">
+    Previous
+  </button>
+  <button data-bs-target="#carousel__ID__" data-bs-slide="next" type="button">
+    Next
+  </button>
+</div>
+```
+
+## Supporting JavaScript file
+
+To customise Page Builder behaviour for a project, create the file:
+
+```
+/components/INSTALL_NAME/admin/pagesupport-custom.js
+```
+
+If the file exists, it is loaded after the standard `pagesupport.js`. Use it to override grid selectors, colour swatches, breakpoints, and other Page Builder options:
+
+```javascript
+window.pbCustomOptions = function(options) {
+  // Called on Page Builder init — modify options object as needed
+  options.color_swatches = ["#ff0000", "#00ff00", "#0000ff"];
+  options.color_picker = false; // disable free colour picker
+};
+
+window.pbCustomSettings = function(me) {
+  // Redefine grid selectors for a non-Bootstrap grid
+  me.grid.section_default_class = 'section';
+  me.grid.row = 'div.grid, div[class*="pb-grid"]';
+  me.grid.row_default_class = 'grid';
+  me.grid.column = 'div[class*="grid__col"]:not(.pb-not-column), div[class*="pb-col"]';
+  me.grid.column_default_class = 'grid__col grid__col--12';
+  me.column.valid_prefixes = [
+    'grid__col--', 'grid__col--sm-', 'grid__col--md-',
+    'grid__col--lg-', 'grid__col--xl-'
+  ];
+};
+```
+
+### Page Builder events
+
+Listen to Page Builder events via `window.addEventListener`:
+
+```javascript
+window.addEventListener("WJ.PageBuilder.gridChanged", function(e) {
+  // Called when the grid structure changes
+});
+```
+
+| Event | When it fires |
+|---|---|
+| `WJ.PageBuilder.loaded` | After the page is loaded in the editor |
+| `WJ.PageBuilder.gridChanged` | When the grid changes (block added, moved, removed) |
+| `WJ.PageBuilder.styleChange` | When a block's style/class changes |
+| `WJ.PageBuilder.newElementAdded` | When a new element is inserted |
+| `WJ.PageBuilder.elementDuplicated` | When an element is duplicated |
+| `WJ.PageBuilder.elementMoved` | When an element is moved |
+
+## Preview images for blocks
+
+For each HTML block file, place an image with the same base name alongside it (e.g. `contact01.html` and `contact01.jpg`). The image is shown in the block picker in the Page Builder UI.
+
+Images can be generated automatically by running the script `/components/grideditor/phantom/generator.jsp`, which requires [PhantomJS](https://phantomjs.org) installed and its path set in the configuration variable `grideditorPhantomjsPath`.
+
+## Customising existing applications
+
+To modify the output of an existing WebJET application (e.g. the search or banner component) without risking overwrites on update:
+
+<Steps>
+  <Step title="Locate the original file">
+    Find the file you want to modify, for example `/components/search/search.jsp`.
+  </Step>
+  <Step title="Copy it to your install-name path">
+    Create a copy at `/components/INSTALL_NAME/search/search.jsp` where `INSTALL_NAME` matches the `installName` configuration constant.
+  </Step>
+  <Step title="Edit the copy">
+    Make your changes to the copied file. `!INCLUDE(...)!` references in pages can remain pointing to the original path — WebJET automatically checks the install-name path first.
+  </Step>
+</Steps>
+
+For Spring MVC applications in `/apps/`, the same pattern applies:
+
+```
+/apps/file-archive/mvc/file-archive.html
+→ copy to →
+/apps/INSTALL_NAME/file-archive/mvc/file-archive.html
+```
+
+WebJET searches paths in order and uses the first match, so your project-specific copy always takes precedence over the default.
+
+## Built-in advanced block patterns
+
+### Tabs
+
+Mark a `<ul>` with `pb-autotabs` to generate Bootstrap tabs automatically from the container structure. Each container becomes a tab; the tab label is taken from a child element with class `pb-tab-title` or the container's `title` attribute.
+
+```html
+<section>
+  <div class="container pb-not-container">
+    <div class="tabsBox">
+      <ul class="nav nav-tabs pb-autotabs"></ul>
+    </div>
+    <div class="tab-content">
+      <div class="tab-pane fade active show pb-custom-container">
+        <div class="row">
+          <div class="col-12 pb-col-12 pb-tab-title"><h3>Tab 1</h3></div>
+          <div class="col-12 pb-col-12"><p>Content 1</p></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+```
+
+### Accordion
+
+Mark the container with `pb-autoaccordion` to enable automatic accordion generation. Each nested `card` container becomes an accordion item.
+
+```html
+<section>
+  <div class="container pb-not-container pb-autoaccordion">
+    <div class="card pb-custom-container">
+      <div class="card-header">
+        <a class="accordionLink" data-toggle="collapse">
+          <div class="pb-editable"><p>Accordion heading 1</p></div>
+        </a>
+      </div>
+      <div class="collapse">
+        <div class="card-body">
+          <div class="row">
+            <div class="pb-col-12"><p>Accordion content 1</p></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+```
+
+### Auto menu
+
+Add `pb-automenu` to a `<ul>` to generate navigation entries from all `<section>` elements on the page. The menu item label is taken from the element with class `section-title`, then `h1`, then the `title` attribute of the section.
+
+Mark sections you want to exclude from the menu with `pb-not-automenu`.
+
+```html
+<ul class="navbar-nav pb-automenu"></ul>
+```

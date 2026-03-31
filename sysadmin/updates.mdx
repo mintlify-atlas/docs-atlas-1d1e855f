@@ -1,0 +1,71 @@
+---
+title: "Updating WebJET CMS"
+description: "How to update WebJET CMS to a new version: using the built-in update interface, uploading an update package, and handling custom libraries."
+keywords: ["update", "upgrade", "version", "changelog", "update script", "WAR", "migration"]
+---
+
+WebJET CMS includes a built-in **Update** section (accessible under **Settings → Update** in the administration) for applying version upgrades. Updates can be applied directly from the version list or by uploading a local update package.
+
+<Warning>
+  Only update WebJET CMS if you understand what you are doing. Contact your hosting provider for support before starting. If WebJET does not boot correctly after an update, a full application server restart may be required and cannot be performed from within WebJET.
+</Warning>
+
+## Versioning
+
+WebJET CMS uses year-based version numbers. A version like `2026.0` means the first release of the 2026 series. Patch releases increment the minor number (for example, `2026.1`, `2026.2`).
+
+The current installed version is shown with an icon in the version list on the left side of the Update screen.
+
+## Update process
+
+### Updating to a specific version
+
+<Steps>
+  <Step title="Open the Update section">
+    In the administration, navigate to **Settings → Update**. The left panel lists all available versions. Your current version is marked with a badge icon.
+  </Step>
+  <Step title="Review the changelog">
+    Click a version in the list to see all changes it introduces on the right side of the screen. Review the changes before proceeding.
+  </Step>
+  <Step title="Start the update">
+    Select the target version and click the update button to start the upgrade process.
+  </Step>
+  <Step title="Restart if required">
+    If WebJET does not start correctly after the update, a server-side restart of the application server may be required. Contact your hosting provider if the application does not come back up automatically.
+  </Step>
+</Steps>
+
+### Updating from a file
+
+If you cannot use the version list (for example, when updating an air-gapped server), you can upload an update package directly.
+
+<Steps>
+  <Step title="Select the file upload option">
+    In the Update section left menu, select the file upload option.
+  </Step>
+  <Step title="Upload the update package">
+    Choose the update file from your local file system and click the upload button.
+  </Step>
+  <Step title="Apply the update">
+    After a successful upload, you will be prompted to start the update itself using the submit button.
+  </Step>
+</Steps>
+
+## Custom libraries
+
+If your project includes additional JAR libraries, place them in `/WEB-INF/lib-custom/` before running an update.
+
+<Warning>
+  The update process completely replaces the `/WEB-INF/lib/` directory. Any libraries placed there directly will be deleted. This can prevent WebJET from starting after the update. Always use `/WEB-INF/lib-custom/` for project-specific libraries.
+</Warning>
+
+If an update has already been applied and libraries are missing, copy them from `/WEB-INF/lib-custom/` back to `/WEB-INF/lib/` to restore boot capability.
+
+## Rollback considerations
+
+WebJET CMS does not include a built-in rollback mechanism. Before applying an update:
+
+- Back up your database.
+- Back up the web application directory, including `/WEB-INF/lib/` and any customised files.
+
+To roll back, restore the previous WAR deployment and database backup. Coordinate with your hosting provider if the application server needs to be restarted as part of the rollback.

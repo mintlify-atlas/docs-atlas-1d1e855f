@@ -1,0 +1,206 @@
+---
+title: "Security"
+description: "Security development guide for WebJET CMS — covering permissions, XSS protection, HTML sanitization, input validation, auditing, and OWASP dependency scanning."
+keywords: ["security", "PreAuthorize", "XSS", "HTML sanitizer", "OWASP", "AdminLog", "auditing", "permissions", "datatable security", "CAPTCHA"]
+---
+
+WebJET CMS layers security at every tier: REST controller authorization, JPA-level HTML sanitization, audit logging of every admin action, and automated vulnerability scanning of third-party libraries.
+
+## Dependency vulnerability scanning
+
+The project integrates [OWASP Dependency-Check](https://jeremylong.github.io/DependencyCheck/index.html), which scans both Java and JavaScript libraries for known CVEs. Run it with:
+
+```sh
+gradlew --info dependencyCheckAnalyze
+```
+
+The report is written to `build/reports/dependency-check-report.html`. Review it before every release.
+
+### Suppressing false positives
+
+The scan may surface false positives. Two suppression files are available:
+
+| File | Purpose |
+|------|---------|
+| `/dependency-check-suppressions.xml` | Standard WebJET suppressions — **do not modify** |
+| `dependency-check-suppressions-project.xml` | Project-specific suppressions — add your exceptions here |
+
+To add a suppression, click **Suppress** on a finding in the HTML report, copy the generated XML snippet, and paste it inside the `<suppressions>` element in `dependency-check-suppressions-project.xml`.
+
+## REST controller authorization
+
+WebJET CMS extends Spring Security. Protect every REST controller with `@PreAuthorize` so that unauthenticated or insufficiently privileged requests are rejected before any business logic runs.
+
+```java
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import sk.iway.iwcm.system.datatable.DatatableRestControllerV2;
+
+@RestController
+@RequestMapping("/admin/rest/settings/domain-redirect")
+@PreAuthorize("@WebjetSecurityService.hasPermission('menuWebpages')")
+public class RedirectRestController extends DatatableRestControllerV2<RedirectEntity, Long> {
+    // ...
+}
+```
+
+The `@PreAuthorize` annotation is evaluated by Spring Security's method-security infrastructure before the controller method executes. Use WebJET's `@WebjetSecurityService.hasPermission` with the relevant permission key for your module.
+
+## DataTable security hooks
+
+The `DatatableRestControllerV2` base class exposes `beforeSave` and `beforeDelete` hook methods you can override to enforce fine-grained access control on individual records.
+
+```java
+@Override
+public RedirectEntity beforeSave(RedirectEntity entity) {
+    // Reject saves for records the current user does not own
+    if (!currentUserCanEdit(entity)) {
+        throw new AccessDeniedException("Not allowed to edit this record");
+    }
+    return entity;
+}
+
+@Override
+public boolean beforeDelete(RedirectEntity entity) {
+    if (!currentUserCanDelete(entity)) {
+        return false; // returning false prevents deletion
+    }
+    return true;
+}
+```
+
+<Warning>
+  `beforeDelete` returning `false` silently prevents deletion. If you need to surface an error message to the user, throw an appropriate exception instead.
+</Warning>
+
+## XSS protection and HTML sanitization
+
+### Default XSS escaping
+
+By default, when a JPA entity is loaded from the database, all `String` attributes are automatically escaped: `<` and `>` are converted to HTML entities (`&lt;`, `&gt;`). This is handled transparently by `XssAttributeConverter`, which is registered globally via `@Converter(autoApply = true)`.
+
+This means you do not need to manually escape entity fields when rendering them — the converter protects against reflected XSS for all plain-text fields.
+
+### Allowing HTML in a field
+
+If a field is intended to hold HTML (for example, a WYSIWYG editor field of type `DataTableColumnType.QUILL`), you must explicitly opt in to one of two converters:
+
+<CardGroup cols={2}>
+  <Card title="AllowSafeHtmlAttributeConverter" icon="shield-check">
+    Strips dangerous tags and attributes while preserving basic formatting. Backed by the [OWASP Java HTML Sanitizer](https://owasp.org/www-project-java-html-sanitizer/). **Recommended for all WYSIWYG fields.**
+  </Card>
+  <Card title="AllowHtmlAttributeConverter" icon="triangle-exclamation">
+    Allows all HTML including scripts. Use only when the field is genuinely expected to contain executable code and is accessible only to trusted administrators.
+  </Card>
+</CardGroup>
+
+Apply the converter on the JPA attribute:
+
+```java
+import jakarta.persistence.Convert;
+
+// Recommended: allow only safe HTML (OWASP sanitizer)
+@Convert(converter = sk.iway.iwcm.system.jpa.AllowSafeHtmlAttributeConverter.class)
+private String bodyHtml;
+
+// Use sparingly: allow all HTML including scripts
+@Convert(converter = sk.iway.iwcm.system.jpa.AllowHtmlAttributeConverter.class)
+private String templateCode;
+```
+
+<Tip>
+  Use `AllowSafeHtmlAttributeConverter` for any field edited through a `DataTableColumnType.QUILL` column. It applies the OWASP-recommended safe HTML policy automatically on every read from the database.
+</Tip>
+
+## Auditing user actions
+
+### Automatic JPA entity auditing
+
+Add `@EntityListeners(AuditEntityListener.class)` and `@EntityListenersType` to a JPA entity to automatically record every create, update, and delete to the audit log. The listener captures old and new values and writes a human-readable diff.
+
+```java
+import sk.iway.iwcm.Adminlog;
+import sk.iway.iwcm.system.adminlog.AuditEntityListener;
+import sk.iway.iwcm.system.adminlog.annotations.EntityListenersType;
+
+@Entity
+@Table(name = "gallery")
+@EntityListeners(AuditEntityListener.class)
+@EntityListenersType(Adminlog.TYPE_GALLERY)
+@Getter
+@Setter
+public class GalleryEntity {
+    // ...
+}
+```
+
+The listener hooks into three JPA lifecycle callbacks:
+
+| Callback | What is recorded |
+|----------|-----------------|
+| `postPersist` | All field values of the new record |
+| `preUpdate` / `postUpdate` | Only the changed fields (old value → new value) |
+| `preRemove` | All field values of the deleted record |
+
+### Audit log format
+
+<CodeGroup>
+
+```text CREATE example
+CREATE:
+redirect_id: 1482
+active: true
+redirect_from: www.old-domain.sk
+redirect_to: www.new-domain.sk
+redirect_params: false
+redirect_path: false
+http_protocol: http
+
+URI: /admin/rest/settings/domain-redirect/editor
+Domain: iwcm.interway.sk
+User-Agent: Mozilla/5.0 ...
+```
+
+```text UPDATE example
+UPDATE:
+id: 1482
+redirect_to: www.new-domain.sk -> www.new-domain-updated.sk
+redirect_params: false -> true
+redirect_path: false -> true
+
+URI: /admin/rest/settings/domain-redirect/editor
+Domain: iwcm.interway.sk
+User-Agent: Mozilla/5.0 ...
+```
+
+```text DELETE example
+DELETE:
+id: 1482
+redirect_id: 1482
+active: true
+redirect_from: www.old-domain.sk
+redirect_to: www.new-domain-updated.sk
+redirect_params: true
+redirect_path: true
+http_protocol: http
+
+URI: /admin/rest/settings/domain-redirect/editor
+Domain: iwcm.interway.sk
+User-Agent: Mozilla/5.0 ...
+```
+
+</CodeGroup>
+
+### Hiding sensitive fields from the audit
+
+The configuration variable `auditHideProperties` holds a comma-separated list of attribute names whose values are replaced with `*****` in the audit log. The default value is `password,password2,password_salt`. Add any additional sensitive field names to this variable in the administration.
+
+<Warning>
+  Never include plaintext secrets in audit logs. Always add sensitive attributes — API keys, tokens, personal data — to `auditHideProperties`.
+</Warning>
+
+### Technical note: getting pre-update state
+
+Fetching the current database state before a JPA update is non-trivial because the entity managed in the current session already reflects the new values. `AuditEntityListener` solves this by opening a **separate `EntityManager`** to load the original record for comparison. Objects loaded through Spring Data JPA are not affected by this issue because Spring Data uses its own `EntityManager` internally.

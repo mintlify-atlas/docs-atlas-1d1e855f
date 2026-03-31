@@ -1,28 +1,11 @@
 {
-  "$schema": "https://mintlify.com/docs.json",
-  "name": "WebJET CMS",
+  "projectType": "saas",
+  "projectName": "WebJET CMS",
+  "projectDescription": "A full-featured Java/Spring web content management system with multi-role support for editors, administrators, developers, and frontend designers.",
   "theme": "maple",
-  "colors": {
-    "primary": "#166ced",
-    "light": "#12497d",
-    "dark": "#101225"
-  },
-  "favicon": "https://media.brand.dev/e95e4a76-e758-4b48-a122-4321c1009fa8.png",
-  "logo": {
-    "light": "https://media.brand.dev/6dcb31f7-b095-43d3-8feb-270ba49d609a.png",
-    "dark": "https://media.brand.dev/6dcb31f7-b095-43d3-8feb-270ba49d609a.png"
-  },
-  "navbar": {
-    "primary": {
-      "type": "github",
-      "href": "https://github.com/webjetcms/webjetcms"
-    }
-  },
-  "footer": {
-    "socials": {
-      "github": "https://github.com/webjetcms/webjetcms"
-    }
-  },
+  "primaryColor": "#166ced",
+  "lightColor": "#12497d",
+  "darkColor": "#101225",
   "navigation": {
     "tabs": [
       {
@@ -135,5 +118,29 @@
         ]
       }
     ]
-  }
+  },
+  "keyFeatures": [
+    "Visual Page Builder with drag-and-drop block editing",
+    "Multi-role access control: editors, administrators, developers",
+    "Built-in DataTables framework with Spring REST integration",
+    "E-commerce module with orders, delivery methods, and payments",
+    "Multi-step form builder with email verification and SPAM protection",
+    "Multi-language and multi-domain (MultiWeb) support",
+    "Comprehensive application store with 60+ built-in apps",
+    "Full-text search with Lucene indexing",
+    "Audit logging and security hardening for enterprise use",
+    "Spring Framework 7 with Spring Data JPA backend"
+  ],
+  "publicApiSurface": [
+    "WJ.DataTable(options) — initialize a datatable with REST backend",
+    "DatatableRestControllerV2 — base class for datatable REST endpoints",
+    "@DataTableColumn — Java annotation for column definition",
+    "FormProcessorInterface — interface for custom form processors",
+    "NavbarInterface — interface for custom navigation bar generators",
+    "/admin/rest/* — REST API endpoints for admin operations",
+    "BaseEditorFields — base class for datatable editor field customization",
+    "Constants — global configuration constants",
+    "Tools — utility class for common operations",
+    "SendMail — email sending utility"
+  ]
 }

@@ -1,0 +1,239 @@
+---
+title: 'System settings and configuration'
+description: 'How to manage configuration variables, HTTP response headers, automated tasks, and translation keys in WebJET CMS.'
+keywords: ['webjet', 'configuration', 'settings', 'http headers', 'cron', 'automated tasks', 'translation keys', 'configuration variables']
+---
+
+The administration provides two main areas for system-level configuration:
+
+- **Configuration** (under the Setup section) — manage key-value configuration variables that control system behaviour.
+- **Settings** — manage automated tasks, HTTP response headers, and translation keys.
+
+---
+
+## Configuration variables
+
+The Configuration section displays and manages individual configuration variables that differ from their preset (default) values. Variables not yet modified are not shown in the table but can still be referenced and set.
+
+<Info>
+A full reference of commonly used configuration variables is available in the installation documentation.
+</Info>
+
+### Adding a configuration variable
+
+The **Configuration name** field has autocomplete. As you type, it suggests existing variable names — including variables that are not yet in the table (i.e., still using their default value).
+
+Three outcomes are possible when adding:
+
+<AccordionGroup>
+  <Accordion title="Autocomplete used — variable already in the table">
+    The existing record is updated. No new row is created.
+  </Accordion>
+  <Accordion title="Autocomplete used — variable not yet in the table">
+    A new row is added. No new configuration variable is defined; you are overriding the preset default value.
+  </Accordion>
+  <Accordion title="No autocomplete — name typed manually">
+    A new row is added and a brand-new configuration variable is defined.
+  </Accordion>
+</AccordionGroup>
+
+When you select an autocomplete suggestion, the current or default value of that variable is pre-filled in the editor.
+
+Most changes take effect immediately after saving. Some configuration variables require an application server restart.
+
+### Editing a configuration variable
+
+- If you keep the **Configuration name** unchanged, the existing variable is updated.
+- If you change the name to an existing variable's name, that variable is updated instead.
+- If you change the name to one that does not exist, a new variable is created.
+
+### Deleting a configuration variable
+
+<Warning>
+Deleting a variable sets it to a blank value immediately. If the variable has a preset default value, the default only takes effect after an application server restart.
+</Warning>
+
+Two outcomes when deleting:
+- If there is a preset value, the variable reverts to that preset after a restart.
+- If there is no preset value, the variable ceases to exist.
+
+---
+
+## HTTP response headers
+
+The **HTTP Headers** application (in the Settings section) lets you define HTTP response headers (`HTTP Response Header`) applied to pages based on their URLs. Headers are configured per domain.
+
+If multiple headers have the same name, the one with the longest matching URL prefix is used.
+
+### Header editor fields
+
+<AccordionGroup>
+  <Accordion title="URL address">
+    Specifies which URLs the header applies to. Supported formats:
+
+    - `/folder/subfolder/` — applies to all URLs starting with this value.
+    - `^/path/subpath/$` — applies to an exact URL match.
+    - `/path/subpath/*.pdf` or `/path/subpath/*.pdf,*.jpg` — applies to URLs starting with the path and ending with the specified extensions.
+  </Accordion>
+  <Accordion title="Header name">
+    The name of the HTTP header to set.
+  </Accordion>
+  <Accordion title="Header value">
+    The value for the header. Supports the following macros that are replaced at runtime:
+    - `{HTTP_PROTOCOL}` — the request protocol.
+    - `{SERVER_NAME}` / `{DOMAIN_NAME}` / `{DOMAIN_ALIAS}` — domain-related values.
+    - `{HTTP_PORT}` — the server port.
+    - `{INSTALL_NAME}` — the installation name.
+    - `{HEADER_ORIGIN}` — the value of the HTTP `origin` header.
+  </Accordion>
+  <Accordion title="Note">
+    Optional internal note, visible only in administration (for example, recording who requested the header and when).
+  </Accordion>
+</AccordionGroup>
+
+### Automatic headers
+
+- For web pages, `Content-Language` is set automatically based on the folder or template language. If you define this header in the application, your value takes precedence.
+- For URLs starting with `/files`, `/images`, or `/shared`, `Content-Language` is set based on the `defaultLanguage` configuration variable, with language-specific overrides for paths containing `/en/`, `/de/`, `/cz/`, or `/sk/`.
+
+<Warning>
+Some headers (such as `x-robots-tag` for pages with crawling disabled) are set by configuration variables and may override values you set here. See the security tests documentation for details.
+</Warning>
+
+---
+
+## Automated tasks
+
+The **Automated tasks** section (found under Settings) lets you define scheduled background tasks that run automatically on the server.
+
+### Task editor fields
+
+<AccordionGroup>
+  <Accordion title="Name of the task">
+    A descriptive name you assign to the task.
+  </Accordion>
+  <Accordion title="Task">
+    The fully qualified Java class name that implements the `main` method to execute. For example: `sk.iway.iwcm.system.cron.DownloadURL`.
+  </Accordion>
+  <Accordion title="Task parameters">
+    Parameters passed to the task, separated by `|`. For `DownloadURL`, the format is `URL|fromEmail|toEmail|subject`. The URL is required and must include `http://` or `https://`.
+  </Accordion>
+  <Accordion title="Schedule fields (Year, Month, Day of month, Day of week, Hour, Minute, Second)">
+    Controls when the task runs, using cron-style notation:
+    - `*` — always (every unit).
+    - `*/10` — every 10 units (or any other number).
+    - `20` — when the unit equals 20.
+    - `3-5` — when the unit is 3, 4, or 5 (counted from zero).
+
+    Example: to run every 10 minutes, set Minute to `*/10` and all other fields to `*`.
+  </Accordion>
+  <Accordion title="Startup after boot">
+    Whether to run the task automatically when WebJET starts (useful for initial data loading).
+  </Accordion>
+  <Accordion title="Allowed">
+    Whether the task is currently enabled. Disabled tasks do not run regardless of their schedule.
+  </Accordion>
+  <Accordion title="Audited">
+    Whether task executions are recorded in the audit log.
+  </Accordion>
+  <Accordion title="Running on a node">
+    In a multi-node cluster, specifies which node should execute the task.
+  </Accordion>
+</AccordionGroup>
+
+Changes to task timing apply immediately. Tasks that have already started will run to completion.
+
+### Standard built-in tasks
+
+<AccordionGroup>
+  <Accordion title="sk.iway.iwcm.system.cron.Echo">
+    Diagnostic task — prints its first parameter to the console.
+
+    **Parameters:** the text to print.
+  </Accordion>
+  <Accordion title="sk.iway.iwcm.system.cron.DownloadURL">
+    Downloads a URL and optionally sends the result to an email address.
+
+    **Parameters:** `URL (required) | senderEmail | recipientEmail | subject`
+  </Accordion>
+  <Accordion title="sk.iway.iwcm.system.cron.SqlBatchRunner">
+    Executes SQL statements provided as parameters, separated by `|`.
+  </Accordion>
+  <Accordion title="sk.iway.iwcm.filebrowser.UnusedFilesCleaner">
+    Scans a directory for indexed files that are no longer referenced by any page and unpublishes them. Only meaningful when automatic file indexing is enabled via `fileIndexerIndexAllFiles`.
+
+    **Parameters:** `directory | notificationEmail | true/false` (if `true`, files are unpublished; if `false`, only a notification is sent).
+  </Accordion>
+  <Accordion title="sk.iway.iwcm.doc.GroupPublisher">
+    Publishes scheduled changes to web page folders. No parameters.
+  </Accordion>
+  <Accordion title="sk.iway.iwcm.calendar.CalendarDB">
+    Sends email notifications about upcoming calendar events. No parameters.
+  </Accordion>
+  <Accordion title="sk.iway.iwcm.system.ConfPreparedPublisher">
+    Publishes scheduled changes to configuration variables. No parameters.
+  </Accordion>
+  <Accordion title="sk.iway.iwcm.stat.SessionClusterService">
+    Updates active session data across cluster nodes and purges records older than 60 minutes. Use this task (e.g., every 10 minutes) to keep the active logins panel on the dashboard current.
+  </Accordion>
+  <Accordion title="sk.iway.iwcm.stat.StatWriteBuffer">
+    Flushes in-memory web page traffic statistics to the database. No parameters.
+  </Accordion>
+  <Accordion title="sk.iway.iwcm.stat.heat_map.HeatMapCleaner">
+    Deletes generated click heatmap images from statistics. No parameters.
+  </Accordion>
+  <Accordion title="sk.iway.iwcm.components.file_archiv.FileArchivatorInsertLater">
+    Publishes scheduled changes to the file archive. No parameters.
+  </Accordion>
+  <Accordion title="sk.iway.iwcm.components.seo.SeoManager">
+    Detects a page's ranking in search engines based on configured keywords. No parameters.
+  </Accordion>
+  <Accordion title="sk.iway.iwcm.system.monitoring.MonitoringManager">
+    Records data for server monitoring. No parameters.
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Translation keys
+
+The Settings section includes two areas for managing UI translation strings.
+
+### List of keys
+
+The **Translation keys** section lets you create, edit, duplicate, and delete translation keys, as well as import and export them.
+
+Each record shows all language values for the key and the original values from the translation file (before any modifications).
+
+**Key types:**
+
+| Type | Description |
+|------|-------------|
+| Original key | Loaded from a translation file; never modified. Cannot be deleted. |
+| Modified key | An original key whose value has been changed. The modified value is stored in the database; the original remains visible for reference. |
+| New key | Created in the editor, not from a file. Stored entirely in the database and can be deleted. |
+
+<Note>
+When creating a new key, give it a unique name and include the application or module name as a prefix to avoid collisions (for example, `myapp.button.save`).
+</Note>
+
+**Deleting keys:**
+- A new (database-only) key is fully deleted.
+- A modified original key reverts to its file value when deleted from the database.
+- An original (file-based) key cannot be deleted — you will receive a notification.
+
+**Importing keys:**
+
+During import you can choose to import only new (non-existing) keys. Existence is checked per language, so an existing key's value is not overwritten during import.
+
+### Missing keys
+
+The **Missing keys** section lists translation keys that were requested but not found. No editing is allowed here — records are read-only (export only).
+
+The table shows the key name, language, the time the translation was last requested, and the last URL where it was called.
+
+Click **Delete all** to clear the missing-keys list and start collecting fresh data. This is useful for verifying whether a page has any missing translations.
+
+<Tip>
+Clicking on a key in the Missing keys table opens an editor where you can complete the translation and save it immediately, without switching to the List of keys section.
+</Tip>

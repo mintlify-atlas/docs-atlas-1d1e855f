@@ -1,0 +1,138 @@
+---
+title: 'Administration overview'
+description: 'An introduction to the WebJET CMS administration interface, including how to navigate the admin panel, key sections, the dashboard, and the difference between admin, editor, and developer roles.'
+keywords: ['webjet', 'admin', 'administration', 'dashboard', 'navigation', 'roles', 'login', 'sessions']
+---
+
+The WebJET CMS administration interface is where administrators configure the system, manage users, publish content, and monitor activity. This page covers the layout of the admin panel, the main sections available, and the distinctions between user roles.
+
+## Accessing the admin panel
+
+You can log in to the administration at `https://your-domain/admin/`. Enter your login name and password on the login screen.
+
+<Note>
+A password quality check is built into the login dialog. If your password does not meet at least quality level 4, you will be prompted to change it after login. A strong password contains uppercase and lowercase letters, numbers, and special characters such as `.-_?/`.
+</Note>
+
+### Forgotten password
+
+Click the **Forgotten password** link on the login page. Enter your email address — if it is registered in the system, you will receive an email with a link valid for 30 minutes to change your password.
+
+<Warning>
+After clicking the password-reset link, the link becomes inoperable — it cannot be reused, and it expires if not used within 30 minutes.
+</Warning>
+
+### Two-factor authentication (2FA)
+
+WebJET supports two-step verification using Google Authenticator or Microsoft Authenticator (any TOTP-compatible app).
+
+<Steps>
+  <Step title="Enable 2FA in configuration">
+    Set the configuration variable `2factorAuthEnabled` to `true`. To require 2FA for all administrators, also set `isGoogleAuthRequiredForAdmin` to `true`.
+  </Step>
+  <Step title="Set up in your profile">
+    Click your username in the top-right header, then select **Two-step verification**. Enable it and scan the displayed QR code with your authenticator app.
+  </Step>
+  <Step title="Log in with a code">
+    On subsequent logins, after entering your username and password you will be prompted to enter the current code from your authenticator app.
+  </Step>
+</Steps>
+
+<Warning>
+We recommend enabling 2FA on all accounts that can manage user accounts and rights. If you use ActiveDirectory/SSO authentication, you can disable 2FA by setting `2factorAuthEnabled` to `false`.
+</Warning>
+
+### Logging out
+
+Click the logout icon in the top-right corner of the header. For security, always log out after finishing work rather than just closing the browser window.
+
+---
+
+## Administration layout
+
+The admin panel follows a standard layout: a header at the top and a navigation menu on the left.
+
+### Header
+
+The header contains:
+- A link to open the help documentation.
+- A search icon to open the global Search panel.
+- The name of the currently logged-in user, which opens a menu with options for **Profile**, **Two-step verification**, **Encryption Key Management**, and **Logout**.
+- A logout icon.
+
+On deeper menu levels, navigation tabs appear in the header.
+
+### Left menu
+
+The left menu shows icons representing the main sections of the administration. Clicking an icon expands that section's menu items. In a multi-domain installation, you can select the domain you are working with at the bottom of the left menu.
+
+### Mobile and tablet display
+
+When the browser window is narrower than 1200 pixels, the header and left menu are hidden. Tap the hamburger menu icon in the top-left to reveal them. On tablet-width windows (below 992 px), the record editor opens at full window width.
+
+---
+
+## Main admin sections
+
+<CardGroup cols={2}>
+  <Card title="Configuration" icon="sliders">
+    View and manage configuration variables. Covers system-level settings such as languages, email, search indexing, and security options.
+  </Card>
+  <Card title="Users" icon="users">
+    Create and manage administrator accounts and registered website users. Set rights groups, user groups, and approval workflows.
+  </Card>
+  <Card title="Settings" icon="gear">
+    Manage automated tasks (cron jobs), HTTP response headers, and translation keys (list of keys, missing keys).
+  </Card>
+  <Card title="Search" icon="magnifying-glass">
+    Full-text search across web pages, files, and translation keys. Accessible from the magnifying glass icon in the header.
+  </Card>
+</CardGroup>
+
+---
+
+## Welcome screen (dashboard)
+
+After logging in, you are taken to the home screen, which contains several mini-applications.
+
+### My active logins
+
+Displays all active sessions for your user account across devices and cluster nodes. Your current session is marked with a location icon. You can terminate any other session by clicking the logout icon next to it.
+
+<Note>
+Session data is updated when you log in. To keep it refreshed more frequently, add a background task for `sk.iway.iwcm.stat.SessionClusterService` in the Automated Tasks section (for example, every 10 minutes). The task removes records older than 60 minutes from the database.
+</Note>
+
+### Logged-in administrators
+
+If you have the **Home - view logged in administrators** right, you will also see a list of all administrators currently logged in. You can send an email to any listed administrator by clicking the mail icon next to their name.
+
+### Bookmarks
+
+Add shortcuts to frequently used sections. Click the orange icon next to **Bookmarks** to create a new bookmark with a name and URL. Bookmarks are stored in the browser — configure them in each browser you use.
+
+### Feedback
+
+Use the **Send Feedback** button to submit comments, requests, or bug reports to the WebJET development team. You can attach files (such as screenshots) and optionally send anonymously.
+
+---
+
+## User roles
+
+WebJET CMS distinguishes between several categories of users:
+
+<AccordionGroup>
+  <Accordion title="Administrator">
+    Has access to the administration section of the website. Administrators can manage other users and rights, configure the system, and access all areas their individual rights allow. Access to the admin section is granted via the **Rights** tab on the user record.
+  </Accordion>
+  <Accordion title="Editor (redactor)">
+    Can log in to the admin section but typically has restricted rights — for example, access only to specific directories or web pages. Editors cannot access user management unless explicitly granted that right. Rights groups (such as "Editor" or "Marketing") make it easy to assign standard sets of permissions.
+  </Accordion>
+  <Accordion title="Registered user">
+    Does not have access to the administration section. Exists in the system only as a registered website user, typically for access to password-protected sections of the website or for bulk email distribution. Registered users are managed through user groups.
+  </Accordion>
+</AccordionGroup>
+
+<Info>
+The **Rights** tab on a user record is only visible to users who already have administrative rights. Without administrative rights, a user cannot grant admin access to others.
+</Info>
